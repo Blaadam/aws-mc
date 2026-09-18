@@ -91,6 +91,7 @@ resource "aws_security_group" "service" {
 
 resource "aws_vpc_security_group_ingress_rule" "game" {
   security_group_id = aws_security_group.service.id
+  description       = "Minecraft ${var.minecraft_edition} game port"
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = local.server.port
   to_port           = local.server.port
@@ -99,6 +100,7 @@ resource "aws_vpc_security_group_ingress_rule" "game" {
 
 resource "aws_vpc_security_group_ingress_rule" "rcon" {
   security_group_id = aws_security_group.service.id
+  description       = "Watchdog RCON access"
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = local.rcon_port
   to_port           = local.rcon_port
@@ -107,6 +109,7 @@ resource "aws_vpc_security_group_ingress_rule" "rcon" {
 
 resource "aws_vpc_security_group_egress_rule" "all" {
   security_group_id = aws_security_group.service.id
+  description       = "Unrestricted egress: image pulls, EFS, AWS API calls"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
 }

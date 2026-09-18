@@ -174,6 +174,29 @@ you push.
     world's storage to cheaper Infrequent Access while idle — pure saving,
     no availability tradeoff, so this one isn't a toggle.
 
+## Decisions locked in during Phase 2
+
+- **Ran Checkov locally as a first pass on task 2.1/2.6** (ad hoc, not yet
+  wired into CI — that's still task 2.6 proper): 28 findings. Fixed the 9
+  that were free or near-free with no functional tradeoff: security group
+  rule descriptions, launcher Lambda `reserved_concurrent_executions = 1`,
+  SNS topic encryption via the free AWS-managed key
+  (`alias/aws/sns`), locking down each VPC's auto-created default security
+  group to deny-all (only in the create-VPC path — never touched if
+  `vpc_id` is set), and a lifecycle policy on the state bucket (expire
+  noncurrent versions after 90 days, abort incomplete multipart uploads
+  after 7).
+- **The other 20 findings are intentionally not fixed** — each one either
+  costs real recurring money for a threat model that doesn't justify it
+  (customer-managed KMS keys for CloudWatch/EFS/S3, 1-year log retention,
+  Lambda DLQ/VPC placement/X-Ray/code-signing, S3 cross-region replication
+  and access logging, Route 53 DNSSEC), or directly contradicts an
+  already-made architecture call (public subnets / no NAT gateway — the
+  "ECS service and subnets shouldn't have public IPs" findings are exactly
+  the cost-creep risk already listed in the Risks table), or is a false
+  positive for this design (the placeholder A record "has no attached
+  resource" — that's the watchdog's job at runtime, by design).
+
 ## Inspiration repo
 
 <https://github.com/AndresArcones/minecraft-aws-ondemand>

@@ -106,13 +106,17 @@ resource "aws_cloudwatch_log_group" "launcher" {
 }
 
 resource "aws_lambda_function" "launcher" {
-  function_name    = "${var.subdomain_part}-launcher"
-  role             = aws_iam_role.launcher.arn
-  handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.12"
-  timeout          = 10
-  filename         = data.archive_file.launcher.output_path
-  source_code_hash = data.archive_file.launcher.output_base64sha256
+  function_name = "${var.subdomain_part}-launcher"
+  role          = aws_iam_role.launcher.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.12"
+  timeout       = 10
+  # Only one concurrent invocation is ever useful — it just flips
+  # desiredCount to 1 — so this caps cost/API load if a burst of DNS
+  # queries somehow fires it repeatedly in a short window.
+  reserved_concurrent_executions = 1
+  filename                       = data.archive_file.launcher.output_path
+  source_code_hash               = data.archive_file.launcher.output_base64sha256
 
   environment {
     variables = {

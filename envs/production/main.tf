@@ -76,6 +76,7 @@ module "ecs" {
 # other, this rule connects their security groups from the root.
 resource "aws_vpc_security_group_ingress_rule" "efs_from_ecs" {
   security_group_id            = module.storage.security_group_id
+  description                  = "NFS from the Minecraft ECS service"
   referenced_security_group_id = module.ecs.security_group_id
   from_port                    = 2049
   to_port                      = 2049

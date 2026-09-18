@@ -18,6 +18,19 @@ resource "aws_vpc" "this" {
   tags = { Name = "${var.project_name}-vpc" }
 }
 
+# Nothing in this project ever attaches to the VPC's auto-created default
+# security group — every resource gets its own dedicated one. Locking it
+# down to deny-all is pure risk reduction with no functional impact. Only
+# done in the create-VPC path: never touch the default SG of a VPC the
+# caller brought via vpc_id, since other things might depend on it.
+resource "aws_default_security_group" "this" {
+  count = local.create_vpc ? 1 : 0
+
+  vpc_id = aws_vpc.this[0].id
+
+  tags = { Name = "${var.project_name}-default-locked-down" }
+}
+
 resource "aws_internet_gateway" "this" {
   count = local.create_vpc ? 1 : 0
 

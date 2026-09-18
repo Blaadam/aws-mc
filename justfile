@@ -105,3 +105,17 @@ logs-launcher:
     set -e
     fn=$(terraform -chdir=envs/production output -raw launcher_function_name | tr -cd 'A-Za-z0-9._/#-')
     aws logs tail "/aws/lambda/$fn" --region us-east-1 --since 15m --follow
+
+# Review the SNS topic's subscription statuses — shows whether the email
+# subscription is confirmed or pending. If the subscription is pending, check
+# your inbox for the confirmation email and click the link.
+sns-status:
+    #!/usr/bin/env sh
+    set -e
+    topic=$(terraform -chdir=envs/production output -raw sns_topic_arn | tr -cd 'A-Za-z0-9:._/#-')
+    if [ -z "$topic" ]; then
+        echo "sns_topic_arn is empty — sns_email_address isn't set in terraform.tfvars"
+        exit 1
+    fi
+    aws sns list-subscriptions-by-topic --topic-arn "$topic" \
+        --query "Subscriptions[].{Endpoint:Endpoint,Status:SubscriptionArn}" --output table
