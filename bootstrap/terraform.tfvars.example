@@ -1,0 +1,2 @@
+bucket_name = "mc-tfstate-123456789012"
+aws_region  = "eu-west-2"

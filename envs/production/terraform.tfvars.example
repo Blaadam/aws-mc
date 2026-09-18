@@ -1,0 +1,23 @@
+domain_name     = "example.com"
+subdomain_part  = "minecraft"
+
+aws_region = "eu-west-2"
+
+cloudflare_zone_id = "your-cloudflare-zone-id"
+
+# cloudflare_api_token is a secret. This file (once you cp it to
+# terraform.tfvars) is gitignored — same as .env was in the CDK original —
+# so it's fine to set it below instead of exporting an env var every shell
+# session. Just double-check `git status` before committing; nothing should
+# ever show terraform.tfvars as a tracked/staged file.
+# cloudflare_api_token = "your-cloudflare-api-token"
+
+sns_email_address = "you@example.com"
+
+# Defaults (task_cpu=512, task_memory=1024, shutdown_minutes=10,
+# container_insights=false) are tuned for lowest cost on a small hobby
+# server. Uncomment any of these for more headroom/reliability instead:
+# task_cpu            = 1024  # 1 vCPU
+# task_memory         = 2048  # 2GB — Mojang's official minimum
+# shutdown_minutes    = 20    # more forgiving reconnect window
+# container_insights  = true  # per-metric CloudWatch cost, better visibility
