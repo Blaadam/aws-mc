@@ -128,3 +128,18 @@ resource "aws_resourcegroups_group" "this" {
     })
   }
 }
+
+# Billing-side counterpart to the resource group above: activates the same
+# two tags as AWS Cost Allocation Tags so Cost Explorer can break down
+# spend by Project/Environment too, not just inventory. Account-wide
+# setting, not scoped to this stack — this only activates a tag key AWS has
+# already seen on a billed resource, it doesn't create the tag itself.
+resource "aws_ce_cost_allocation_tag" "project" {
+  tag_key = "Project"
+  status  = "Active"
+}
+
+resource "aws_ce_cost_allocation_tag" "environment" {
+  tag_key = "Environment"
+  status  = "Active"
+}

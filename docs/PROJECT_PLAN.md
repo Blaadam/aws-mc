@@ -55,7 +55,7 @@ containers themselves (reused as-is).
 | 2.4 | Pin both containers by digest; log retention | 1.3 | 1h |
 | 2.5 | `observability`: CloudWatch dashboard + start/idle/error alarms | 1.8 | 3h |
 | 2.6 | CI: add `tflint` + tfsec/Checkov + `plan` on PR | 0.5 | 2h |
-| 2.7 | README: variables, deploy, manual-start fallback, teardown | all | 2h |
+| 2.7 | README: variables, deploy, manual-start fallback, teardown | all | ✅ done |
 | 2.8 | Re-run functional test on hardened stack | 2.1–2.6 | 1.5h |
 
 **Phase 3 — Improved trigger (optional, ~6–8h)**

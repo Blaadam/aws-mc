@@ -77,6 +77,18 @@ status:
     aws ecs describe-services --cluster "$cluster" --services "$service" \
         --query "services[0].{desired:desiredCount,running:runningCount,status:status}" --output table
 
+# Manual-start fallback: skip waiting on the DNS trigger (SRV lookup ->
+# Route 53 query log -> Lambda) entirely and flip desired_count straight to
+# 1. Useful the first time you connect, or if CloudWatch's delivery delay
+# (can be a couple of minutes) is more patience than you've got right now.
+start:
+    #!/usr/bin/env sh
+    set -e
+    cluster=$(terraform -chdir=envs/production output -raw ecs_cluster_name | tr -cd 'A-Za-z0-9._/#-')
+    service=$(terraform -chdir=envs/production output -raw ecs_service_name | tr -cd 'A-Za-z0-9._/#-')
+    aws ecs update-service --cluster "$cluster" --service "$service" --desired-count 1 > /dev/null
+    echo "Starting. Run 'just status' to watch it come up."
+
 # Force the server to stop now, instead of waiting for shutdown_minutes of
 # idle time. Terraform doesn't manage desired_count day to day (see
 # ignore_changes in modules/ecs/main.tf) — this is the same kind of direct,
