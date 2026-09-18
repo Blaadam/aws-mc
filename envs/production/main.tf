@@ -102,3 +102,29 @@ resource "cloudflare_record" "ns_delegation" {
   ttl     = 3600
   proxied = false
 }
+
+# Groups every resource tagged for this project in one place in the AWS
+# console (Resource Groups & Tag Editor), across both regions — everything
+# already gets Project/Environment tags via default_tags on both providers.
+# Free. Also gives task 2.5 (observability) a natural anchor to build a
+# CloudWatch dashboard from later.
+resource "aws_resourcegroups_group" "this" {
+  name        = var.project_name
+  description = "All resources for the ${var.project_name} on-demand Minecraft server"
+
+  resource_query {
+    query = jsonencode({
+      ResourceTypeFilters = ["AWS::AllSupported"]
+      TagFilters = [
+        {
+          Key    = "Project"
+          Values = [var.project_name]
+        },
+        {
+          Key    = "Environment"
+          Values = [var.environment]
+        },
+      ]
+    })
+  }
+}

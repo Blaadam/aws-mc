@@ -177,15 +177,21 @@ you push.
 ## Decisions locked in during Phase 2
 
 - **Ran Checkov locally as a first pass on task 2.1/2.6** (ad hoc, not yet
-  wired into CI — that's still task 2.6 proper): 28 findings. Fixed the 9
-  that were free or near-free with no functional tradeoff: security group
-  rule descriptions, launcher Lambda `reserved_concurrent_executions = 1`,
-  SNS topic encryption via the free AWS-managed key
+  wired into CI — that's still task 2.6 proper): 28 findings. Fixed 8 that
+  were free or near-free with no functional tradeoff: security group rule
+  descriptions, SNS topic encryption via the free AWS-managed key
   (`alias/aws/sns`), locking down each VPC's auto-created default security
   group to deny-all (only in the create-VPC path — never touched if
   `vpc_id` is set), and a lifecycle policy on the state bucket (expire
   noncurrent versions after 90 days, abort incomplete multipart uploads
   after 7).
+- **Attempted but reverted: launcher Lambda `reserved_concurrent_executions
+  = 1`.** Good idea in principle (only one concurrent invocation is ever
+  useful), but this AWS account's total Lambda concurrency quota is too low
+  — AWS requires at least 10 unreserved concurrent executions across the
+  whole account, and reserving even 1 for this function violated that
+  floor on apply. Revisit once/if the account's quota is raised (a support
+  request, not something Terraform controls).
 - **The other 20 findings are intentionally not fixed** — each one either
   costs real recurring money for a threat model that doesn't justify it
   (customer-managed KMS keys for CloudWatch/EFS/S3, 1-year log retention,
