@@ -101,6 +101,26 @@ stop:
     aws ecs update-service --cluster "$cluster" --service "$service" --desired-count 0 > /dev/null
     echo "Stopping. Run 'just status' to watch it drain."
 
+# Shell into the running minecraft-server container via ECS Exec (SSM) — no
+# network exposure needed, unlike RCON. Requires the server to be running
+# (`just start`/`just status`) and the Session Manager plugin installed
+# locally: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html
+# Pass a command to run something specific instead of an interactive shell,
+# e.g. `just console "rcon-cli list"` (rcon-cli is bundled in the itzg
+# image, so this needs no network RCON access either).
+console command="/bin/bash":
+    #!/usr/bin/env sh
+    set -e
+    cluster=$(terraform -chdir=envs/production output -raw ecs_cluster_name | tr -cd 'A-Za-z0-9._/#-')
+    service=$(terraform -chdir=envs/production output -raw ecs_service_name | tr -cd 'A-Za-z0-9._/#-')
+    task=$(aws ecs list-tasks --cluster "$cluster" --service-name "$service" --query "taskArns[0]" --output text)
+    if [ -z "$task" ] || [ "$task" = "None" ]; then
+        echo "No running task — start the server first with 'just start'."
+        exit 1
+    fi
+    aws ecs execute-command --cluster "$cluster" --task "$task" \
+        --container minecraft-server --interactive --command "{{command}}"
+
 # Tail Route 53's DNS query log — shows whether lookups for the server are
 # actually reaching Route 53 at all. Always us-east-1, regardless of
 # aws_region, since that's where query logging is required to live.

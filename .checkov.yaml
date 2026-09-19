@@ -13,6 +13,7 @@ skip-check:
   - CKV_AWS_184 # EFS KMS encryption
   - CKV_AWS_145 # S3 bucket default KMS encryption
   - CKV_AWS_173 # Lambda environment variable KMS encryption
+  - CKV_AWS_224 # ECS Exec session logging (client<->container) KMS encryption
 
   # --- Log/data durability features: cost not justified for this project. ---
   - CKV_AWS_338 # CloudWatch log group retention >= 1 year

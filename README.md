@@ -30,6 +30,8 @@ if you'd rather skip the wait, or the trigger doesn't fire.
 
 - [Terraform](https://developer.hashicorp.com/terraform/install) ≥1.10,
   [`just`](https://github.com/casey/just), AWS CLI
+- [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
+  — only needed for `just console` (ECS Exec)
 - An AWS account. This project touches VPC/EC2, ECS, EFS, Route 53, Lambda,
   SNS, CloudWatch Logs, S3, IAM, and Resource Groups. For a dedicated IAM
   user rather than granting `AdministratorAccess`, attach:
@@ -161,6 +163,7 @@ Many more `server.properties` keys are supported this way — see the
 just status         # desired/running task count
 just start          # manual-start fallback, see below
 just stop           # force it down now, instead of waiting on shutdown_minutes
+just console         # shell into the running server via ECS Exec — no network access needed
 just logs-dns        # tail the Route 53 query log (us-east-1) — is a lookup reaching Route 53?
 just logs-launcher    # tail the launcher Lambda's log (us-east-1) — is it being invoked?
 just sns-status       # confirmed vs PendingConfirmation on the email subscription
@@ -181,6 +184,19 @@ out-of-band mechanism the watchdog itself uses (Terraform deliberately
 doesn't manage `desired_count` day to day — see `ignore_changes` in
 `modules/ecs/main.tf` — so this is always safe to run without fighting a
 future `apply`).
+
+### Admin access
+
+RCON (25575/tcp) is closed to the internet by default — see
+[`rcon_allowed_cidrs`](#variables) if you want it open to a specific IP.
+For most admin needs, `just console` is the better default: it shells into
+the running container via ECS Exec (IAM-authenticated over SSM, no network
+exposure at all), where `rcon-cli` is already available:
+
+```sh
+just console "rcon-cli list"   # one-shot command
+just console                   # interactive shell (default)
+```
 
 ## Teardown
 

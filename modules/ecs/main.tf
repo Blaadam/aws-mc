@@ -70,6 +70,23 @@ resource "aws_ecs_cluster" "this" {
     name  = "containerInsights"
     value = var.container_insights ? "enabled" : "disabled"
   }
+
+  configuration {
+    execute_command_configuration {
+      logging = "OVERRIDE"
+
+      log_configuration {
+        cloud_watch_log_group_name = aws_cloudwatch_log_group.exec.name
+      }
+    }
+  }
+}
+
+# ECS Exec session transcripts — an audit trail for admin shell access, not
+# a debug log, so this always exists regardless of var.debug.
+resource "aws_cloudwatch_log_group" "exec" {
+  name              = "/ecs/${var.cluster_name}/exec"
+  retention_in_days = var.log_retention_days
 }
 
 resource "aws_ecs_cluster_capacity_providers" "this" {
@@ -204,6 +221,49 @@ resource "aws_iam_role_policy" "route53_edit" {
   })
 }
 
+resource "aws_iam_role_policy" "exec" {
+  name = "ecs-exec"
+  role = aws_iam_role.task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # The SSM Session Manager channel ECS Exec runs over — these actions
+        # don't support resource-level scoping (AWS constraint, same as
+        # ec2:DescribeNetworkInterfaces above).
+        Sid    = "AllowExecSSMChannel"
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowExecSessionLogging"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:DescribeLogStreams",
+          "logs:PutLogEvents",
+        ]
+        Resource = "${aws_cloudwatch_log_group.exec.arn}:*"
+      },
+      {
+        # logs:DescribeLogGroups doesn't support resource-level scoping
+        # (AWS constraint) — must be "*".
+        Sid      = "AllowExecLogGroupDiscovery"
+        Effect   = "Allow"
+        Action   = "logs:DescribeLogGroups"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "sns_publish" {
   count = var.sns_topic_configured ? 1 : 0
 
@@ -300,6 +360,11 @@ resource "aws_ecs_task_definition" "this" {
             readOnly      = false
           }
         ]
+        # AWS-recommended for ECS Exec: reaps processes spawned by exec
+        # sessions (e.g. rcon-cli) instead of leaving zombies behind.
+        linuxParameters = {
+          initProcessEnabled = true
+        }
       },
       var.debug ? { logConfiguration = local.mc_log_config } : {}
     ),
@@ -324,11 +389,12 @@ resource "aws_ecs_task_definition" "this" {
 }
 
 resource "aws_ecs_service" "this" {
-  name             = var.service_name
-  cluster          = aws_ecs_cluster.this.id
-  task_definition  = aws_ecs_task_definition.this.arn
-  desired_count    = 0
-  platform_version = "LATEST"
+  name                   = var.service_name
+  cluster                = aws_ecs_cluster.this.id
+  task_definition        = aws_ecs_task_definition.this.arn
+  desired_count          = 0
+  platform_version       = "LATEST"
+  enable_execute_command = true
 
   capacity_provider_strategy {
     capacity_provider = var.use_fargate_spot ? "FARGATE_SPOT" : "FARGATE"

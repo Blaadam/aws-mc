@@ -247,6 +247,28 @@ you push.
   Lambda's automatic async-invoke retry kicks in (now logged before
   re-raising).
 
+## Beyond the milestone plan
+
+Small, non-milestone improvements picked up along the way — not gated on a
+phase, just worth doing.
+
+- **ECS Exec (`just console`):** `enable_execute_command = true` on the
+  service, plus the task role permissions it needs (`ssmmessages:*` — no
+  resource-level scoping possible, an AWS constraint; CloudWatch Logs
+  actions scoped to a dedicated `/ecs/<cluster>/exec` log group, except
+  `logs:DescribeLogGroups` which also can't be scoped). Session transcripts
+  always log to that group — an audit trail for admin shell access, not
+  gated behind `var.debug` since it's a security concern, not a debugging
+  one. `initProcessEnabled = true` added to the minecraft-server container
+  per AWS's recommendation, so exec sessions don't leave zombie processes
+  behind. This is now the preferred way to run admin commands (`just
+  console "rcon-cli list"`, using the itzg image's bundled `rcon-cli`) —
+  IAM-authenticated over SSM, no security-group exposure at all, unlike
+  the CIDR-based `rcon_allowed_cidrs`. Checkov's `CKV_AWS_224` (exec
+  session logging without a customer-managed KMS key) joins the existing
+  KMS skip-check bucket in `.checkov.yaml` — same cost reasoning as the
+  rest of that bucket.
+
 ## Inspiration repo
 
 <https://github.com/AndresArcones/minecraft-aws-ondemand>
