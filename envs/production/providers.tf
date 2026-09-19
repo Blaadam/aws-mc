@@ -4,6 +4,14 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   })
+
+  # The Cloudflare provider validates api_token's shape (40+ chars,
+  # a-zA-Z0-9_-) during Configure, even with zero cloudflare_record
+  # instances to actually use it — an empty string fails that check and
+  # breaks `plan`/`apply` outright when manage_cloudflare_dns is false and
+  # cloudflare_api_token was never set. Substitute an obviously-fake
+  # placeholder in that case; it's never used for a real request.
+  cloudflare_api_token = var.cloudflare_api_token != "" ? var.cloudflare_api_token : "unused-manage_cloudflare_dns-is-false-000"
 }
 
 provider "aws" {
@@ -27,6 +35,9 @@ provider "aws" {
   }
 }
 
+# Configured even when manage_cloudflare_dns is false — Terraform requires
+# every provider a resource block references to be configured, regardless
+# of whether that resource's count evaluates to zero.
 provider "cloudflare" {
-  api_token = var.cloudflare_api_token
+  api_token = local.cloudflare_api_token
 }

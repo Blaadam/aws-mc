@@ -86,15 +86,19 @@ resource "aws_vpc_security_group_ingress_rule" "efs_from_ecs" {
 
 # Delegates the child zone from Cloudflare (authoritative for domain_name)
 # to the Route 53 zone dns_trigger created — this is the fix for the
-# Cloudflare-parent DNS assumption in the CDK original.
+# Cloudflare-parent DNS assumption in the CDK original. Optional: only
+# created when manage_cloudflare_dns is true — domain_name can be hosted
+# anywhere, this is just the one provider Terraform can automate delegation
+# for. When false, delegate hosted_zone_name_servers manually instead (see
+# README).
 #
 # count instead of for_each: the name servers are unknown until the zone is
 # actually created (a brand-new zone's NS values can't be known at plan
 # time), and for_each requires its keys to be known up front. A Route 53
 # public hosted zone always returns exactly 4 name servers — a fixed AWS
-# platform invariant — so count = 4 is safe here.
+# platform invariant — so count = 4 (when enabled) is safe here.
 resource "cloudflare_record" "ns_delegation" {
-  count = 4
+  count = var.manage_cloudflare_dns ? 4 : 0
 
   zone_id = var.cloudflare_zone_id
   name    = module.dns_trigger.subdomain

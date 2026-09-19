@@ -3,8 +3,13 @@ subdomain_part  = "minecraft"
 
 aws_region = "eu-west-2"
 
-cloudflare_zone_id = "your-cloudflare-zone-id"
-
+# manage_cloudflare_dns automates delegating the subdomain from Cloudflare.
+# Off by default — domain_name can be hosted anywhere; leave this false and
+# delegate manually (see README) if you're not on Cloudflare. If you are,
+# uncomment all three below:
+# manage_cloudflare_dns = true
+# cloudflare_zone_id    = "your-cloudflare-zone-id"
+#
 # cloudflare_api_token is a secret. This file (once you cp it to
 # terraform.tfvars) is gitignored — same as .env was in the CDK original —
 # so it's fine to set it below instead of exporting an env var every shell

@@ -5,8 +5,8 @@ Rebuild [`minecraft-aws-ondemand`](https://github.com/AndresArcones/minecraft-aw
 model of the original, while fixing the Cloudflare-parent DNS assumption and
 tightening IAM, secrets, and observability.
 
-**In scope:** full infra port, Cloudflare NS delegation, least-privilege IAM,
-CI checks, world-data migration.
+**In scope:** full infra port, optional Cloudflare NS delegation,
+least-privilege IAM, CI checks, world-data migration.
 **Out of scope for the core:** the NLB redesign and any change to the itzg
 containers themselves (reused as-is).
 
@@ -268,6 +268,34 @@ phase, just worth doing.
   session logging without a customer-managed KMS key) joins the existing
   KMS skip-check bucket in `.checkov.yaml` — same cost reasoning as the
   rest of that bucket.
+- **Cloudflare made optional (`var.manage_cloudflare_dns`, default
+  `false`):** Cloudflare was only ever used for one thing — the 4 NS
+  records that delegate the child zone `dns-trigger` creates. That child
+  zone (and its query logging) is always needed regardless of who hosts
+  `domain_name`'s authoritative DNS, since Route 53 query logging is what
+  the DNS-trigger depends on — so nothing about the core design assumed
+  Cloudflare specifically. `cloudflare_api_token`/`cloudflare_zone_id` got
+  empty-string defaults plus a cross-variable `validation` block (needs
+  Terraform ≥1.9, already required by `required_version >= 1.10.0`) that
+  only requires them when the toggle is on; `cloudflare_record.ns_delegation`'s
+  `count` gates on the same toggle. The `cloudflare` provider block itself
+  stays configured unconditionally — Terraform requires every provider a
+  resource block references to be configured even when that resource's
+  count is 0. An empty token is *not* harmless there, though — verified
+  against the real provider: it validates `api_token`'s shape (40+ chars,
+  `a-zA-Z0-9_-`) during `Configure`, before any resource is even
+  considered, so an empty string breaks `plan`/`apply` outright regardless
+  of `manage_cloudflare_dns`. `local.cloudflare_api_token` in
+  `providers.tf` substitutes an obviously-fake 41-char placeholder
+  whenever the real variable is empty, satisfying that check without ever
+  being used for a real request. Scope deliberately stops at "toggle
+  + manual delegation fallback" — non-Cloudflare users take the
+  `hosted_zone_name_servers` output and add the NS record wherever their
+  DNS lives, same one-time step regardless of host (including Route 53
+  itself). A more automated Route 53-native delegation path (auto-creating
+  the NS record in an existing parent Route 53 zone) was considered and
+  deliberately deferred — meaningfully more code for one specific case that
+  a five-minute manual step already covers.
 
 ## Inspiration repo
 

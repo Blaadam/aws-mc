@@ -5,8 +5,12 @@ started by a DNS lookup, torn down by a watchdog sidecar after everyone
 disconnects. Terraform port of
 [`minecraft-aws-ondemand`](https://github.com/AndresArcones/minecraft-aws-ondemand)
 (a CDK project), fixing its assumption that the domain's parent DNS lives in
-Route 53 — here Cloudflare stays authoritative for the domain, and only the
-Minecraft subdomain is delegated to Route 53.
+Route 53 — a child Route 53 zone is always created for the subdomain
+(Route 53 query logging is what the DNS-trigger depends on), and delegated
+from wherever your domain's authoritative DNS actually lives. If that's
+**Cloudflare**, Terraform can automate the delegation (`manage_cloudflare_dns`);
+otherwise — Route 53 itself, or any other DNS host — delegate it manually,
+a one-time, few-minute step (see [Deploy](#deploy)).
 
 ## How it works
 
@@ -42,12 +46,16 @@ if you'd rather skip the wait, or the trigger doesn't fire.
   (`IAMFullAccess` is unavoidably broad — this stack creates and passes IAM
   roles to Lambda/ECS, so the deploy identity is inherently powerful; see
   [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the caveat.)
-- A domain already added to **Cloudflare** (nameservers pointed there), with
-  nothing currently at `<subdomain_part>.<domain_name>` (default subdomain:
-  `minecraft`) — that name needs to be free for the Route 53 delegation.
-  You'll need the zone's **Zone ID** (dashboard → Overview → right sidebar)
-  and an **API token** scoped to `Zone → DNS → Edit` for that zone (dashboard
-  → My Profile → API Tokens → Create Token → "Edit zone DNS" template).
+- A domain, with nothing currently at `<subdomain_part>.<domain_name>`
+  (default subdomain: `minecraft`) — that name needs to be free for the
+  Route 53 delegation. If it's on **Cloudflare** and you want delegation
+  automated (`manage_cloudflare_dns = true`), you'll also need the zone's
+  **Zone ID** (dashboard → Overview → right sidebar) and an **API token**
+  scoped to `Zone → DNS → Edit` for that zone (dashboard → My Profile →
+  API Tokens → Create Token → "Edit zone DNS" template). Anywhere else
+  (Route 53 itself, Namecheap, GoDaddy, …), leave `manage_cloudflare_dns`
+  at its default (`false`) and delegate manually — see
+  [Deploy](#deploy).
 
 ## Credentials
 
@@ -103,9 +111,19 @@ just plan
 just apply
 ```
 
-Confirm the delegation landed:
+Delegate the child zone — **if `manage_cloudflare_dns = true`**, Terraform
+already did this; skip to confirming it landed. **Otherwise**, do it
+yourself once, wherever `domain_name`'s DNS actually lives (including
+Route 53 itself, if that's already your authoritative DNS — just add the
+same NS record set to your existing hosted zone):
 ```sh
 just output hosted_zone_name_servers
+```
+Create an NS record for `<subdomain_part>.<domain_name>` pointing at those
+four values.
+
+Confirm the delegation landed (either way):
+```sh
 dig NS minecraft.<your-domain>
 ```
 The four values should match (can take a few minutes to propagate).
@@ -117,8 +135,9 @@ The four values should match (can take a few minutes to propagate).
 
 | Variable | Default | Notes |
 |---|---|---|
-| `domain_name` | *required* | Cloudflare-managed root domain |
-| `cloudflare_zone_id`, `cloudflare_api_token` | *required* | See [Prerequisites](#prerequisites) |
+| `domain_name` | *required* | Root domain, hosted anywhere — see [Prerequisites](#prerequisites) |
+| `manage_cloudflare_dns` | `false` | Automates NS delegation in Cloudflare. Leave `false` for any other DNS host and delegate manually |
+| `cloudflare_zone_id`, `cloudflare_api_token` | `""` | Required only when `manage_cloudflare_dns = true` — see [Prerequisites](#prerequisites) |
 | `subdomain_part` | `minecraft` | Must not already be in use |
 | `minecraft_edition` | `java` | or `bedrock` |
 | `task_cpu` / `task_memory` | `512` / `1024` | Deliberately tight (half the CDK original) for cost — bump to `1024`/`2048`+ if the server feels sluggish |

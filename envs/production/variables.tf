@@ -8,7 +8,7 @@
 # --- Required ---------------------------------------------------------------
 
 variable "domain_name" {
-  description = "Root domain whose authoritative DNS is Cloudflare, e.g. \"example.com\". A child Route 53 zone (subdomain_part.domain_name) is created and delegated from Cloudflare via NS records. Was DOMAIN_NAME."
+  description = "Root domain the subdomain will be created under, e.g. \"example.com\". A child Route 53 zone (subdomain_part.domain_name) is always created for it — Route 53 query logging is what the DNS-trigger depends on, regardless of who hosts domain_name's own authoritative DNS. If that's Cloudflare, see manage_cloudflare_dns for automated delegation; otherwise delegate the zone manually (see README) using the hosted_zone_name_servers output. Was DOMAIN_NAME."
   type        = string
 }
 
@@ -115,15 +115,33 @@ variable "tags" {
   default     = {}
 }
 
+variable "manage_cloudflare_dns" {
+  description = "Whether Terraform creates the NS delegation record in Cloudflare automatically. Off by default — this stack works with domain_name hosted anywhere; Cloudflare is just the one provider it can automate delegation for. When false, cloudflare_api_token/cloudflare_zone_id aren't needed — delegate the child zone manually instead (see README), using the hosted_zone_name_servers output."
+  type        = bool
+  default     = false
+}
+
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token, scoped to DNS edit on the zone covering domain_name. Used to create the NS delegation record. Set it in terraform.tfvars (gitignored, same as the CDK original's .env) or via TF_VAR_cloudflare_api_token — either way, never in a committed file."
+  description = "Cloudflare API token, scoped to DNS edit on the zone covering domain_name. Required only when manage_cloudflare_dns is true. Set it in terraform.tfvars (gitignored, same as the CDK original's .env) or via TF_VAR_cloudflare_api_token — either way, never in a committed file."
   type        = string
   sensitive   = true
+  default     = ""
+
+  validation {
+    condition     = !var.manage_cloudflare_dns || var.cloudflare_api_token != ""
+    error_message = "cloudflare_api_token is required when manage_cloudflare_dns is true."
+  }
 }
 
 variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID for domain_name, where the NS delegation record for the child Route 53 zone is created."
+  description = "Cloudflare zone ID for domain_name, where the NS delegation record for the child Route 53 zone is created. Required only when manage_cloudflare_dns is true."
   type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.manage_cloudflare_dns || var.cloudflare_zone_id != ""
+    error_message = "cloudflare_zone_id is required when manage_cloudflare_dns is true."
+  }
 }
 
 variable "container_insights" {
