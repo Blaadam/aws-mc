@@ -109,7 +109,7 @@ resource "aws_lambda_function" "launcher" {
   function_name    = "${var.subdomain_part}-launcher"
   role             = aws_iam_role.launcher.arn
   handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.12"
+  runtime          = "python3.13"
   timeout          = 10
   filename         = data.archive_file.launcher.output_path
   source_code_hash = data.archive_file.launcher.output_base64sha256

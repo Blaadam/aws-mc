@@ -146,9 +146,8 @@ you push.
   `aws_ecs_service.this`) since the watchdog and launcher Lambda flip it at
   runtime — an unrelated `terraform apply` must not reset a running server
   back to 0.
-- **Launcher Lambda runtime is Python 3.12**, not the CDK original's 3.8
-  (no longer creatable on Lambda) and not yet 3.13 — that bump, plus making
-  the handler idempotent, is what task 2.3 is for.
+- **Launcher Lambda runtime was Python 3.12** (not the CDK original's 3.8,
+  no longer creatable on Lambda) — bumped to 3.13 in task 2.3.
 - **RCON (25575/tcp) ingress rule removed (task 2.1):** it was open to
   `0.0.0.0/0` on the service security group, ported as-is from the CDK
   original. Unnecessary — the watchdog's readiness check
@@ -235,6 +234,18 @@ you push.
   was a standalone-validation-only inconsistency. Live-plan CI (running
   `terraform plan` against real AWS via OIDC) is deliberately out of scope
   for now — revisit when ready to grant GitHub Actions AWS access.
+- **Task 2.3 done: launcher Lambda bumped to Python 3.13.** The handler
+  (`modules/dns-trigger/lambda/lambda_function.py`) already had a
+  check-then-act guard (only calls `update_service` when `desiredCount ==
+  0`) from the first commit, which already makes it safe under retries —
+  `update_service(desiredCount=1)` is an assignment, not an increment, so a
+  redundant or concurrent invocation can't scale the service past 1 even
+  without the check. Hardened two real gaps instead of re-deriving
+  idempotency that was already there: an unhandled `IndexError` if
+  `describe_services` ever returns no matching service (now a clear
+  `RuntimeError`), and no visibility into `ClientError` failures before
+  Lambda's automatic async-invoke retry kicks in (now logged before
+  re-raising).
 
 ## Inspiration repo
 
