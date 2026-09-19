@@ -35,13 +35,19 @@ skip-check:
   - CKV_AWS_130 # VPC subnets assign public IP by default — public-subnet, no-NAT design
   - CKV_AWS_333 # ECS service public IP — same design, tasks live in those public subnets
   - CKV2_AWS_38 # Route 53 DNSSEC — not worth the operational overhead here
+  - CKV_AWS_394 # aws_availability_zones zone-name/zone-id filter — would hardcode one
+  # region's AZ names, breaking var.aws_region's "works in any region" design; see
+  # PROJECT_PLAN.md for why a variable-driven filter doesn't satisfy this check either
 
   # --- False positive for this design. ---
   - CKV2_AWS_23 # Route53 A record "has no attached resource" — watchdog owns it at runtime
-
-  # --- New finding, not yet triaged (first surfaced by wiring Checkov into
-  # CI in task 2.6) — follow up separately, see PROJECT_PLAN.md. ---
-  - CKV_AWS_394 # aws_availability_zones data source doesn't pin zone identity
+  - CKV_AWS_258 # Lambda Function URL AuthType NONE — start API is gated by an
+  # app-level shared-secret ?token=, not AWS auth, by design (see var.enable_start_api).
+  # A no-op in CI (default false), but real once enabled locally — verified by running
+  # checkov with enable_start_api = true actually set in a local terraform.tfvars.
+  - CKV_AWS_301 # Same start-API tradeoff as CKV_AWS_258, flagged separately on the
+  # second aws_lambda_permission statement (lambda:InvokeFunction via
+  # invoked_via_function_url) that AWS now also requires for a public Function URL.
 
 compact: true
 quiet: true

@@ -148,6 +148,7 @@ The four values should match (can take a few minutes to propagate).
 | `minecraft_image_env_vars` | `{ EULA = "TRUE" }` | Any itzg image setting goes here — see [Customizing the server](#customizing-the-server) |
 | `aws_region` | `eu-west-2` | Where the core stack runs. Route 53 query logging always uses us-east-1 regardless — an AWS constraint, not a setting |
 | `rcon_allowed_cidrs` | `[]` | CIDR blocks allowed to reach RCON (25575/tcp) — closed by default, nothing in this stack needs it open. Set to your own IP (e.g. `["203.0.113.4/32"]`) to run admin commands yourself via `mcrcon`. Never `0.0.0.0/0` — RCON auth is a plaintext password |
+| `enable_start_api` | `false` | Public HTTP URL that starts the server (see [Manual start](#manual-start)). No AWS auth on the URL — gated by a generated `?token=` instead. Start-only |
 
 Changing any of these is `just plan` / `just apply`; most take effect on
 the next server restart, not live (Fargate task definitions are immutable —
@@ -181,6 +182,7 @@ Many more `server.properties` keys are supported this way — see the
 ```sh
 just status         # desired/running task count
 just start          # manual-start fallback, see below
+just start-url       # print the bookmarkable HTTP start URL — needs enable_start_api = true
 just stop           # force it down now, instead of waiting on shutdown_minutes
 just console         # shell into the running server via ECS Exec — no network access needed
 just logs-dns        # tail the Route 53 query log (us-east-1) — is a lookup reaching Route 53?
@@ -205,6 +207,20 @@ out-of-band mechanism the watchdog itself uses (Terraform deliberately
 doesn't manage `desired_count` day to day — see `ignore_changes` in
 `modules/ecs/main.tf` — so this is always safe to run without fighting a
 future `apply`).
+
+`just start` needs your AWS CLI credentials, though — for starting it from
+somewhere those aren't available (e.g. a phone), set `enable_start_api =
+true` and use the bookmarkable HTTP URL instead:
+
+```sh
+just start-url
+```
+
+Prints a URL with a generated secret baked in (`?token=...`) — the Function
+URL itself has no AWS auth, so that token is the only thing gating it.
+Bookmark it, tap it, the server starts the same way `just start` does.
+Nothing stops it yet the same way (still `just stop`, or `shutdown_minutes`
+idle) — this is deliberately start-only for now.
 
 ### Admin access
 

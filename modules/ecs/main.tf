@@ -23,7 +23,7 @@ locals {
     logDriver = "awslogs"
     options = {
       "awslogs-group"         = aws_cloudwatch_log_group.minecraft[0].name
-      "awslogs-region"        = data.aws_region.current.name
+      "awslogs-region"        = data.aws_region.current.region
       "awslogs-stream-prefix" = "minecraft-server"
     }
   } : null
@@ -32,7 +32,7 @@ locals {
     logDriver = "awslogs"
     options = {
       "awslogs-group"         = aws_cloudwatch_log_group.watchdog[0].name
-      "awslogs-region"        = data.aws_region.current.name
+      "awslogs-region"        = data.aws_region.current.region
       "awslogs-stream-prefix" = "minecraft-ecsfargate-watchdog"
     }
   } : null
@@ -46,7 +46,7 @@ locals {
         Action = "ecs:*"
         Resource = [
           aws_ecs_service.this.id,
-          "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task/${var.cluster_name}/*",
+          "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:task/${var.cluster_name}/*",
         ]
       },
       {

@@ -32,3 +32,9 @@ output "minecraft_log_group_name" {
 output "watchdog_log_group_name" {
   value = module.ecs.watchdog_log_group_name
 }
+
+# null unless var.enable_start_api is true — see modules/dns-trigger/outputs.tf.
+output "start_api_url" {
+  value     = module.dns_trigger.start_api_url
+  sensitive = true
+}

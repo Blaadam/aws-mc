@@ -47,24 +47,24 @@ containers themselves (reused as-is).
 
 **Phase 2 — Harden (~16–24h)**
 
-| ID | Task | Depends on | Est |
-|---|---|---|---|
-| 2.1 | Split IAM: least-priv launcher role + scoped watchdog task role | 1.3, 1.4 | 3h |
-| ~~2.2~~ | ~~Twilio creds → Secrets Manager; wire Twilio SMS Lambda~~ — dropped, see Decisions | — | — |
-| 2.3 | Upgrade launcher Lambda to Python 3.13; make idempotent | 1.4 | 1.5h |
-| 2.4 | Pin both containers by digest; log retention | 1.3 | 1h |
-| 2.5 | `observability`: CloudWatch dashboard + start/idle/error alarms | 1.8 | 3h |
-| 2.6 | CI: add `tflint` + tfsec/Checkov + `plan` on PR | 0.5 | 2h |
-| 2.7 | README: variables, deploy, manual-start fallback, teardown | all | ✅ done |
-| 2.8 | Re-run functional test on hardened stack | 2.1–2.6 | 1.5h |
+| ID | Task | Depends on | Est | Status |
+|---|---|---|---|---|
+| 2.1 | Split IAM: least-priv launcher role + scoped watchdog task role | 1.3, 1.4 | 3h | ✅ done |
+| ~~2.2~~ | ~~Twilio creds → Secrets Manager; wire Twilio SMS Lambda~~ — dropped, see Decisions | — | — | — |
+| 2.3 | Upgrade launcher Lambda to Python 3.13; make idempotent | 1.4 | 1.5h | ✅ done |
+| 2.4 | Pin both containers by digest; log retention | 1.3 | 1h | ⬜ log retention done (Phase 1); digest pinning still open |
+| 2.5 | `observability`: CloudWatch dashboard + start/idle/error alarms | 1.8 | 3h | ⬜ not started |
+| 2.6 | CI: add `tflint` + tfsec/Checkov + `plan` on PR | 0.5 | 2h | ⬜ `tflint`/Checkov done; live `plan` on PR deliberately deferred (needs OIDC, declined for now) |
+| 2.7 | README: variables, deploy, manual-start fallback, teardown | all | — | ✅ done |
+| 2.8 | Re-run functional test on hardened stack | 2.1–2.6 | 1.5h | ⬜ pending — needs a real `apply` first |
 
 **Phase 3 — Improved trigger (optional, ~6–8h)**
 
-| ID | Task | Depends on | Est |
-|---|---|---|---|
-| 3.1 | Lambda Function URL → `desired_count=1` | 2.1 | 2h |
-| 3.2 | Cloudflare Worker behind Access as start endpoint | 3.1 | 3h |
-| 3.3 | Retire query-log trigger; keep watchdog for scale-down | 3.2 | 1h |
+| ID | Task | Depends on | Est | Status |
+|---|---|---|---|---|
+| 3.1 | Lambda Function URL → `desired_count=1` | 2.1 | 2h | ✅ done (`var.enable_start_api`) — start-only, shared-secret token instead of AWS auth |
+| 3.2 | Cloudflare Worker behind Access as start endpoint | 3.1 | 3h | ❌ declined — see Decisions; the raw Function URL is good enough |
+| 3.3 | Retire query-log trigger; keep watchdog for scale-down | 3.2 | 1h | ⬜ not started — the start API is additive, not a replacement, for now |
 
 **Migration (do once, before cutover): ~3h.** Snapshot the old stack's EFS,
 restore into the new EFS, verify the world loads, cut DNS over, then tear
@@ -157,11 +157,11 @@ you push.
   same-task traffic never crosses the ENI/security group boundary anyway.
   Nothing else needs this port reachable, so the rule is gone rather than
   scoped down.
-- **AWS provider pinned to `~> 5.0`, not v6:** v6 renamed several
-  attributes (e.g. `aws_region.name` → `aws_region.region`) and likely has
-  other breaking changes across the resources this project uses (ECS, IAM,
-  Route 53, Lambda, EFS). Staying on 5.x for now; revisit as a deliberate
-  upgrade later, not an incidental one.
+- **AWS provider pinned to `~> 5.0`, not v6, initially** — v6 renamed
+  several attributes (e.g. `aws_region.name` → `aws_region.region`) and
+  likely had other breaking changes across the resources this project
+  uses. Stayed on 5.x deliberately: "revisit as a deliberate upgrade
+  later, not an incidental one." Superseded during Phase 3 — see below.
 - **Defaults tuned for lowest cost, not reliability** — the architecture
   already gets the big win (Spot + scale-to-zero); these are the remaining
   levers, all overridable in `terraform.tfvars`:
@@ -221,8 +221,8 @@ you push.
   codebase — the 20th, RCON, is fixed. One check unrelated to that Phase 2
   Checkov pass showed up once `tflint` started running for real:
   `CKV_AWS_394` (`aws_availability_zones` not pinning zone identity) —
-  skipped for now as not yet triaged, flagged here rather than silently
-  dropped. Fixing `tflint`'s own findings (every module's `versions.tf` was
+  triaged and accepted, see "Beyond the milestone plan" below for why.
+  Fixing `tflint`'s own findings (every module's `versions.tf` was
   missing `required_version` and a provider version constraint) surfaced a
   separate, pre-existing bug: each module's own `.terraform.lock.hcl` (used
   only when running `terraform init` standalone inside a module directory,
@@ -313,6 +313,91 @@ phase, just worth doing.
   each recipe checks existence with `-json` first and only then trusts
   `-raw` for the value. Verified both branches against a real Terraform
   state before trusting this, not just reasoned about.
+- **`CKV_AWS_394` triaged and accepted**, closing out the "not yet triaged"
+  flag from task 2.6. Read Checkov's actual check source
+  (`AWSAvailabilityZonesUnfiltered.py`) rather than guessing: it only
+  passes an `aws_availability_zones` data source that carries an
+  *identity*-based allowlist filter (`zone-name` or `zone-id` with literal
+  values) — `state = "available"`, `all_availability_zones`, or a
+  denylist (`exclude_names`/`exclude_zone_ids`) all still fail it, since
+  each leaves the result open to a newly-added AZ leaking in. Satisfying
+  it for real means hardcoding one specific region's AZ names into
+  `modules/networking/main.tf` — directly breaking `var.aws_region`'s
+  "works in any region" design (the README doesn't hardcode a region; the
+  default is just `eu-west-2`). A variable-driven filter doesn't dodge
+  this either: the check inspects whether `filter { name = "zone-id" }`
+  is *literally present* in the code, regardless of what `values`
+  evaluates to — so passing the scanner without hardcoding a region would
+  mean shipping a filter with an empty `values` list by default, and the
+  EC2 API itself rejects a filter with zero values. `var.max_azs` already
+  bounds the blast radius of AWS adding a new AZ (caps subnet count; can't
+  make more subnets appear), and any AZ-selection shift a new AZ did cause
+  would show up in `terraform plan` output before ever reaching `apply` —
+  this project has no unattended-apply path. Accepted, not fixed; added to
+  `.checkov.yaml`'s "already-made architecture calls" bucket.
+- **Task 3.1 done, 3.2 declined (`var.enable_start_api`, default `false`):**
+  the Cloudflare Worker in 3.2 only ever existed to put a nicer URL in
+  front of the Function URL from 3.1 — a raw `https://<id>.lambda-url.
+  <region>.on.aws/` is fine when you're bookmarking it, not typing it, so
+  3.2 (and by extension 3.3, which depended on it) is skipped rather than
+  deferred-with-intent-to-build. Reuses the existing launcher Lambda
+  instead of adding a second one — its handler already ignores the
+  invoking event entirely and just does an idempotent "start if not
+  started," so a `aws_lambda_function_url` pointed at the same function is
+  just a second way to invoke the exact same logic, no duplication.
+  Auth model was a real decision, not a default: `authorization_type =
+  "NONE"` (no AWS SigV4 needed — the point is tapping a phone bookmark)
+  gated instead by an app-level `?token=` query param checked in the
+  handler against a Terraform-generated `random_password` (`special =
+  false`, so it's URL-safe with no percent-encoding surprises). Considered
+  and rejected: `AWS_IAM` auth (secure, but defeats "tap from phone" —
+  needs a SigV4-signed request, no plain browser hit) and fully-open with
+  no token (simplest, but zero gatekeeping on a URL that can trigger real
+  — if cheap — spend). `CKV_AWS_258` (Function URL AuthType NONE) is
+  skipped in `.checkov.yaml` for exactly this reason; currently a no-op
+  for CI since `count = 0` while the default stays false. Explicitly
+  start-only, per your call — stop stays `just stop`/idle timeout for now,
+  revisit later if wanted.
+- **Start API 403'd on first real test — AWS added a second mandatory
+  permission requirement, provider bumped to fix it.** After apply, the
+  bookmarked URL returned `403 {"Message":"Forbidden...}` — traced (via
+  live `get-function-url-config`/`get-policy`/`curl -v` against the real
+  resource, not guesswork) to a genuine AWS Lambda platform change:
+  starting October 2025 (fully enforced November 1, 2026 — we're mid
+  rollout now), a public Function URL's resource policy needs **both**
+  `lambda:InvokeFunctionUrl` **and** `lambda:InvokeFunction` (the second
+  scoped via `invoked_via_function_url = true`) — our original single
+  statement matched the pre-October-2025 requirement only. The Terraform
+  argument for the second statement doesn't exist before provider
+  **v6.28.0**, which forced the question this project had been deferring:
+  bump `~> 5.0` to `~> 6.0` now, shell out to the AWS CLI via
+  `local-exec`, or shelve the feature. Chose the bump. Audited every
+  module against HashiCorp's official v6 upgrade guide (not just the
+  breaking changes that happened to come up in search results) before
+  touching anything: the *only* affected code in this entire project was
+  `data.aws_region.current.name` → `.region` (3 call sites in
+  `modules/ecs/main.tf`, 1 in `modules/dns-trigger/main.tf`) — nothing
+  else in the full breaking-changes list (removed OpsWorks/SimpleDB/
+  Worklink resources, `aws_eip`'s `vpc` arg, strict booleans, Redshift
+  default flips, a long list of resource/data-source attribute renames)
+  touches anything this project uses; verified with a targeted grep for
+  every resource/data type in the codebase plus a search for legacy
+  `"1"`/`"0"` string-booleans (none found). All 7 `versions.tf`/inline
+  `terraform{}` blocks bumped to `~> 6.0`, every lock file regenerated
+  fresh (`-upgrade`, not hand-edited) resolving to `6.65.0`, every module
+  and root re-validated clean against the real provider before trusting
+  any of this. Along the way, also found (via a live `curl` test) a
+  duplicate, non-Terraform-managed `FunctionURLAllowPublicAccess`
+  resource-policy statement on the function — AWS Console's own
+  auto-generated name when toggling Function URL auth type there,
+  presumably added while looking into the original 403. Removed it
+  (`aws lambda remove-permission`) since Terraform doesn't own it and two
+  overlapping public-access grants isn't a state worth leaving around,
+  though it turned out not to be the actual cause. `CKV_AWS_301` joined
+  `CKV_AWS_258` in `.checkov.yaml` once local testing (with
+  `enable_start_api = true` actually set — Checkov reads the real
+  `terraform.tfvars` off disk regardless of `.gitignore`) exercised the
+  second permission statement for the first time.
 
 ## Inspiration repo
 

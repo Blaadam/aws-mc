@@ -89,6 +89,24 @@ start:
     aws ecs update-service --cluster "$cluster" --service "$service" --desired-count 1 > /dev/null
     echo "Starting. Run 'just status' to watch it come up."
 
+# Print the bookmarkable start URL — a public HTTP hit that starts the
+# server, gated by a shared-secret ?token= (not AWS auth), for when you
+# want to start it from a phone home-screen bookmark instead of `just
+# start` or waiting on the DNS trigger. Only exists when enable_start_api
+# = true in terraform.tfvars. Just `just output start_api_url` also works
+# (naming a sensitive output reveals it — only the bare, list-everything
+# `terraform output` masks sensitive values) but prints it JSON-quoted;
+# this uses -raw so it's clean, copy-paste-ready plain text.
+start-url:
+    #!/usr/bin/env sh
+    set -e
+    if ! terraform -chdir=envs/production output -json start_api_url >/dev/null 2>&1; then
+        echo "No start URL — set enable_start_api = true in terraform.tfvars and apply first."
+        exit 1
+    fi
+    terraform -chdir=envs/production output -raw start_api_url
+    echo
+
 # Force the server to stop now, instead of waiting for shutdown_minutes of
 # idle time. Terraform doesn't manage desired_count day to day (see
 # ignore_changes in modules/ecs/main.tf) — this is the same kind of direct,

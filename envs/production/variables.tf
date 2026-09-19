@@ -155,3 +155,9 @@ variable "rcon_allowed_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "enable_start_api" {
+  description = "Adds a public Lambda Function URL that starts the server on an HTTP hit — an alternative to waiting on the DNS trigger's CloudWatch delivery delay, e.g. for a phone home-screen bookmark. No AWS auth on the URL itself; gated by a Terraform-generated shared-secret ?token= query param instead (see `just start-url`). Off by default. Start-only — stopping is still just, well, `just stop`, or the shutdown_minutes idle timeout."
+  type        = bool
+  default     = false
+}

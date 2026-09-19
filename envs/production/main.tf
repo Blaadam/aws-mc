@@ -31,11 +31,12 @@ module "dns_trigger" {
     aws = aws.use1
   }
 
-  domain_name    = var.domain_name
-  subdomain_part = var.subdomain_part
-  aws_region     = var.aws_region
-  cluster_name   = var.project_name
-  service_name   = "${var.project_name}-server"
+  domain_name      = var.domain_name
+  subdomain_part   = var.subdomain_part
+  aws_region       = var.aws_region
+  cluster_name     = var.project_name
+  service_name     = "${var.project_name}-server"
+  enable_start_api = var.enable_start_api
 }
 
 module "ecs" {

@@ -32,3 +32,9 @@ sns_email_address = "you@example.com"
 # mcrcon) from a known IP. Never use 0.0.0.0/0 here: RCON auth is a
 # plaintext password over TCP.
 # rcon_allowed_cidrs = ["203.0.113.4/32"]
+
+# Adds a public URL that starts the server on an HTTP hit (e.g. a phone
+# home-screen bookmark) instead of waiting on the DNS trigger. Gated by a
+# generated shared-secret token, not AWS auth — after apply, get the
+# ready-to-bookmark URL with `just start-url`. Start-only for now.
+# enable_start_api = true

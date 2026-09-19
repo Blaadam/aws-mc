@@ -21,3 +21,10 @@ output "launcher_role_arn" {
 output "launcher_function_name" {
   value = aws_lambda_function.launcher.function_name
 }
+
+# null unless var.enable_start_api is true. Ready to bookmark as-is —
+# already includes the ?token= query param.
+output "start_api_url" {
+  value     = var.enable_start_api ? "${aws_lambda_function_url.start[0].function_url}?token=${random_password.start_token[0].result}" : null
+  sensitive = true
+}

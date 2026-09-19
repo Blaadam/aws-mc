@@ -120,21 +120,75 @@ resource "aws_lambda_function" "launcher" {
   # value of [10]" on apply. Revisit if/when the account's quota is raised.
 
   environment {
-    variables = {
-      REGION  = var.aws_region
-      CLUSTER = var.cluster_name
-      SERVICE = var.service_name
-    }
+    variables = merge(
+      {
+        REGION  = var.aws_region
+        CLUSTER = var.cluster_name
+        SERVICE = var.service_name
+      },
+      var.enable_start_api ? { START_TOKEN = random_password.start_token[0].result } : {}
+    )
   }
 
   depends_on = [aws_cloudwatch_log_group.launcher]
+}
+
+# Shared secret for the start API — the Function URL itself has no AWS auth
+# (authorization_type = NONE, so it's tappable from a plain browser/phone
+# bookmark), so this is what actually gates it. special = false keeps it
+# URL-safe with no percent-encoding surprises when pasted into a bookmark.
+resource "random_password" "start_token" {
+  count = var.enable_start_api ? 1 : 0
+
+  length  = 32
+  special = false
+}
+
+# Off by default. Lets you start the server from a plain HTTP hit (e.g. a
+# phone home-screen bookmark) instead of waiting on the DNS trigger's
+# CloudWatch delivery delay. Same launcher Lambda, same idempotent
+# check-then-act scale-up — this is just a second way to invoke it.
+resource "aws_lambda_function_url" "start" {
+  count = var.enable_start_api ? 1 : 0
+
+  function_name      = aws_lambda_function.launcher.function_name
+  authorization_type = "NONE"
+}
+
+# Companion to the Function URL above — AWS requires an explicit
+# resource-based policy statement for public (authorization_type = NONE)
+# invocation, separate from the URL resource itself.
+resource "aws_lambda_permission" "function_url" {
+  count = var.enable_start_api ? 1 : 0
+
+  statement_id           = "AllowPublicFunctionUrlInvoke"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.launcher.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
+# As of October 2025, AWS requires *both* lambda:InvokeFunctionUrl and
+# lambda:InvokeFunction on the resource policy for a NONE-auth Function
+# URL to actually work — the statement above alone now 403s with
+# "AccessDeniedException" despite AuthType being NONE and looking
+# otherwise correctly configured. invoked_via_function_url scopes this
+# grant to function-URL calls specifically, not just any InvokeFunction.
+resource "aws_lambda_permission" "function_url_invoke" {
+  count = var.enable_start_api ? 1 : 0
+
+  statement_id             = "AllowPublicFunctionUrlInvokeFunction"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.launcher.function_name
+  principal                = "*"
+  invoked_via_function_url = true
 }
 
 resource "aws_lambda_permission" "cloudwatch" {
   statement_id  = "AllowCloudWatchLogsInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.launcher.function_name
-  principal     = "logs.${data.aws_region.current.name}.amazonaws.com"
+  principal     = "logs.${data.aws_region.current.region}.amazonaws.com"
   # The trailing :* matters: CloudWatch Logs invokes with a source ARN that
   # includes it (any log stream in the group), but aws_cloudwatch_log_group's
   # own .arn attribute is the bare group ARN without it. Without appending
