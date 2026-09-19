@@ -55,6 +55,7 @@ module "ecs" {
   shutdown_minutes         = var.shutdown_minutes
   debug                    = var.debug
   container_insights       = var.container_insights
+  rcon_allowed_cidrs       = var.rcon_allowed_cidrs
 
   efs_file_system_id   = module.storage.file_system_id
   efs_file_system_arn  = module.storage.file_system_arn

@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "**.tf"
+      - ".tflint.hcl"
+      - ".checkov.yaml"
       - ".github/workflows/terraform.yml"
 
 jobs:
@@ -30,3 +32,35 @@ jobs:
       - name: terraform validate
         working-directory: ${{ matrix.dir }}
         run: terraform validate
+
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: latest
+
+      - name: tflint --init
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --recursive lints every module and root as its own config, since
+      # tflint doesn't otherwise descend into called modules.
+      - name: tflint
+        run: tflint --recursive --format compact
+
+  checkov:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads .checkov.yaml for framework/skip-check config — see that file
+      # for why each skipped check is an accepted, documented tradeoff.
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          config_file: .checkov.yaml

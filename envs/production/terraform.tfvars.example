@@ -21,3 +21,9 @@ sns_email_address = "you@example.com"
 # task_memory         = 2048  # 2GB — Mojang's official minimum
 # shutdown_minutes    = 20    # more forgiving reconnect window
 # container_insights  = true  # per-metric CloudWatch cost, better visibility
+
+# RCON (25575/tcp) is closed to the internet by default — nothing in this
+# stack needs it open. Uncomment to run remote admin commands yourself (e.g.
+# mcrcon) from a known IP. Never use 0.0.0.0/0 here: RCON auth is a
+# plaintext password over TCP.
+# rcon_allowed_cidrs = ["203.0.113.4/32"]

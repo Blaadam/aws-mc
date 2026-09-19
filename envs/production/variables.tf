@@ -131,3 +131,9 @@ variable "container_insights" {
   type        = bool
   default     = false
 }
+
+variable "rcon_allowed_cidrs" {
+  description = "CIDR blocks allowed to reach RCON (25575/tcp) on the service security group, e.g. [\"203.0.113.4/32\"] for your own IP. Empty by default — nothing in this stack needs RCON reachable from outside the task. Only set this if you want to run remote admin commands yourself (e.g. mcrcon). Never use 0.0.0.0/0: RCON auth is a plaintext password over TCP."
+  type        = list(string)
+  default     = []
+}

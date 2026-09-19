@@ -98,10 +98,16 @@ resource "aws_vpc_security_group_ingress_rule" "game" {
   ip_protocol       = local.server.protocol
 }
 
+# Off by default (var.rcon_allowed_cidrs = []) — nothing in this stack needs
+# RCON reachable from outside the task; the watchdog's readiness check talks
+# to it over localhost. One rule per CIDR since this resource type takes a
+# single cidr_ipv4, not a list.
 resource "aws_vpc_security_group_ingress_rule" "rcon" {
+  for_each = toset(var.rcon_allowed_cidrs)
+
   security_group_id = aws_security_group.service.id
-  description       = "Watchdog RCON access"
-  cidr_ipv4         = "0.0.0.0/0"
+  description       = "RCON admin access (manually opted in via rcon_allowed_cidrs)"
+  cidr_ipv4         = each.value
   from_port         = local.rcon_port
   to_port           = local.rcon_port
   ip_protocol       = "tcp"

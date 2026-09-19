@@ -1,0 +1,46 @@
+# Checkov config for aws-mc. Every skip below is a deliberate cost/scope
+# decision already recorded in docs/PROJECT_PLAN.md ("Decisions locked in
+# during Phase 2") — see that doc for the full reasoning. A newly-failing
+# check should be triaged into that doc (fixed, or added here with a reason),
+# not silently appended to this list.
+framework:
+  - terraform
+
+skip-check:
+  # --- Customer-managed KMS keys: recurring cost not justified for this
+  # threat model; AWS-managed keys already encrypt at rest. ---
+  - CKV_AWS_158 # CloudWatch log group KMS encryption
+  - CKV_AWS_184 # EFS KMS encryption
+  - CKV_AWS_145 # S3 bucket default KMS encryption
+  - CKV_AWS_173 # Lambda environment variable KMS encryption
+
+  # --- Log/data durability features: cost not justified for this project. ---
+  - CKV_AWS_338 # CloudWatch log group retention >= 1 year
+  - CKV_AWS_18 # S3 access logging
+  - CKV_AWS_144 # S3 cross-region replication
+  - CKV2_AWS_62 # S3 event notifications
+  - CKV2_AWS_11 # VPC flow logging
+
+  # --- Lambda hardening: cost/complexity not justified for one low-traffic
+  # function. ---
+  - CKV_AWS_116 # Lambda DLQ
+  - CKV_AWS_117 # Lambda inside VPC
+  - CKV_AWS_50 # Lambda X-Ray tracing
+  - CKV_AWS_272 # Lambda code-signing
+  - CKV_AWS_115 # Lambda reserved concurrency — attempted, reverted: this
+  # account's mandatory 10-unreserved-execution floor blocked it on apply
+
+  # --- Already-made architecture calls. ---
+  - CKV_AWS_130 # VPC subnets assign public IP by default — public-subnet, no-NAT design
+  - CKV_AWS_333 # ECS service public IP — same design, tasks live in those public subnets
+  - CKV2_AWS_38 # Route 53 DNSSEC — not worth the operational overhead here
+
+  # --- False positive for this design. ---
+  - CKV2_AWS_23 # Route53 A record "has no attached resource" — watchdog owns it at runtime
+
+  # --- New finding, not yet triaged (first surfaced by wiring Checkov into
+  # CI in task 2.6) — follow up separately, see PROJECT_PLAN.md. ---
+  - CKV_AWS_394 # aws_availability_zones data source doesn't pin zone identity
+
+compact: true
+quiet: true

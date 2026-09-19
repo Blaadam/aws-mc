@@ -149,9 +149,15 @@ you push.
 - **Launcher Lambda runtime is Python 3.12**, not the CDK original's 3.8
   (no longer creatable on Lambda) and not yet 3.13 — that bump, plus making
   the handler idempotent, is what task 2.3 is for.
-- **RCON (25575/tcp) is open to `0.0.0.0/0`** on the service security group,
-  ported as-is from the CDK original. Worth tightening in task 2.1
-  (least-priv IAM/network hardening) — nothing currently restricts it.
+- **RCON (25575/tcp) ingress rule removed (task 2.1):** it was open to
+  `0.0.0.0/0` on the service security group, ported as-is from the CDK
+  original. Unnecessary — the watchdog's readiness check
+  (`minecraft-ondemand/minecraft-ecsfargate-watchdog/watchdog.sh`) runs a
+  local `netstat` against 25575, not a network connection, and Fargate
+  `awsvpc` tasks share one network namespace across their containers, so
+  same-task traffic never crosses the ENI/security group boundary anyway.
+  Nothing else needs this port reachable, so the rule is gone rather than
+  scoped down.
 - **AWS provider pinned to `~> 5.0`, not v6:** v6 renamed several
   attributes (e.g. `aws_region.name` → `aws_region.region`) and likely has
   other breaking changes across the resources this project uses (ECS, IAM,
@@ -202,6 +208,33 @@ you push.
   the cost-creep risk already listed in the Risks table), or is a false
   positive for this design (the placeholder A record "has no attached
   resource" — that's the watchdog's job at runtime, by design).
+- **Task 2.1 finished: RCON ingress rule removed** rather than scoped down
+  — see the Phase 1 decision above. Reintroduced as an opt-in toggle,
+  `var.rcon_allowed_cidrs` (default `[]`, no rule created): a `for_each`
+  ingress rule per CIDR on `modules/ecs`, for the case where you later want
+  to run admin commands yourself (`mcrcon`) from a known IP. Deliberately
+  no `0.0.0.0/0` shortcut — RCON auth is a plaintext password over TCP, so
+  the variable only accepts specific CIDRs.
+- **Task 2.6 (partial): `tflint` + Checkov wired into CI**, gated on
+  `.tf`/`.tflint.hcl`/`.checkov.yaml` changes alongside the existing
+  `fmt`/`validate` job. Checkov reads `.checkov.yaml`, whose `skip-check`
+  list is exactly the 19 (of the 20) findings above still present in the
+  codebase — the 20th, RCON, is fixed. One check unrelated to that Phase 2
+  Checkov pass showed up once `tflint` started running for real:
+  `CKV_AWS_394` (`aws_availability_zones` not pinning zone identity) —
+  skipped for now as not yet triaged, flagged here rather than silently
+  dropped. Fixing `tflint`'s own findings (every module's `versions.tf` was
+  missing `required_version` and a provider version constraint) surfaced a
+  separate, pre-existing bug: each module's own `.terraform.lock.hcl` (used
+  only when running `terraform init` standalone inside a module directory,
+  e.g. via `just validate`) had drifted to AWS provider 6.65.0, while
+  `envs/production`'s real lock file — the one that actually governs
+  `apply` — stayed on 5.100.0 per the "stay on 5.x" decision above. Adding
+  the constraint forced the drifted per-module lock files to be
+  regenerated back onto 5.x. Live infrastructure was never on 6.x; this
+  was a standalone-validation-only inconsistency. Live-plan CI (running
+  `terraform plan` against real AWS via OIDC) is deliberately out of scope
+  for now — revisit when ready to grant GitHub Actions AWS access.
 
 ## Inspiration repo
 
