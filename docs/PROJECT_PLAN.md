@@ -296,6 +296,23 @@ phase, just worth doing.
   the NS record in an existing parent Route 53 zone) was considered and
   deliberately deferred — meaningfully more code for one specific case that
   a five-minute manual step already covers.
+- **`just logs-minecraft` / `just logs-watchdog`:** both log groups already
+  existed behind `var.debug` (task 1.x) but had no `just` recipe to tail
+  them — `logs-dns`/`logs-launcher` covered the DNS-trigger path only.
+  Needed new module outputs (`minecraft_log_group_name`,
+  `watchdog_log_group_name`, `null` when `var.debug` is false, same
+  index-guard pattern as `local.mc_log_config` in `modules/ecs/main.tf`).
+  The recipes themselves hit a real gotcha worth recording: a `null`
+  Terraform output isn't stored in state at all, and `terraform output
+  -raw <name>` on a name that's absent from state prints a "No outputs
+  found" warning **to stdout** and exits `0` — not an error, not on
+  stderr, so neither `2>/dev/null` nor an exit-code check catches it, and
+  after stripping punctuation the warning text reads as a non-empty
+  "log group name". `terraform output -json <name>` behaves correctly
+  instead (real error, stderr, exit `1`) for a missing/null output, so
+  each recipe checks existence with `-json` first and only then trusts
+  `-raw` for the value. Verified both branches against a real Terraform
+  state before trusting this, not just reasoned about.
 
 ## Inspiration repo
 

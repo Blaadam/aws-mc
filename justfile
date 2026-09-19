@@ -138,6 +138,35 @@ logs-launcher:
     fn=$(terraform -chdir=envs/production output -raw launcher_function_name | tr -cd 'A-Za-z0-9._/#-')
     aws logs tail "/aws/lambda/$fn" --region us-east-1 --since 15m --follow
 
+# Tail the minecraft-server container's own log (server startup, world
+# loading, player join/leave). Only exists when debug = true in
+# terraform.tfvars — these log groups aren't created otherwise. A null
+# Terraform output isn't stored in state at all, and `output -raw` on a
+# name that's absent prints a warning to stdout and exits 0 rather than
+# failing — so existence is checked with `output -json` (which does error
+# correctly on a missing output) before trusting `-raw` for the value.
+logs-minecraft:
+    #!/usr/bin/env sh
+    set -e
+    if ! terraform -chdir=envs/production output -json minecraft_log_group_name >/dev/null 2>&1; then
+        echo "No log group — set debug = true in terraform.tfvars and apply first."
+        exit 1
+    fi
+    group=$(terraform -chdir=envs/production output -raw minecraft_log_group_name | tr -cd 'A-Za-z0-9._/#-')
+    aws logs tail "$group" --since 15m --follow
+
+# Tail the watchdog sidecar's log (start/shutdown decisions, DNS updates,
+# Spot interruption handling). Same debug = true requirement as above.
+logs-watchdog:
+    #!/usr/bin/env sh
+    set -e
+    if ! terraform -chdir=envs/production output -json watchdog_log_group_name >/dev/null 2>&1; then
+        echo "No log group — set debug = true in terraform.tfvars and apply first."
+        exit 1
+    fi
+    group=$(terraform -chdir=envs/production output -raw watchdog_log_group_name | tr -cd 'A-Za-z0-9._/#-')
+    aws logs tail "$group" --since 15m --follow
+
 # Review the SNS topic's subscription statuses — shows whether the email
 # subscription is confirmed or pending. If the subscription is pending, check
 # your inbox for the confirmation email and click the link.

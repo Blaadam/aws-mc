@@ -23,3 +23,12 @@ output "sns_topic_arn" {
 output "launcher_function_name" {
   value = module.dns_trigger.launcher_function_name
 }
+
+# null unless var.debug is true — see modules/ecs/outputs.tf.
+output "minecraft_log_group_name" {
+  value = module.ecs.minecraft_log_group_name
+}
+
+output "watchdog_log_group_name" {
+  value = module.ecs.watchdog_log_group_name
+}

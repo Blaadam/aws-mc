@@ -185,6 +185,8 @@ just stop           # force it down now, instead of waiting on shutdown_minutes
 just console         # shell into the running server via ECS Exec — no network access needed
 just logs-dns        # tail the Route 53 query log (us-east-1) — is a lookup reaching Route 53?
 just logs-launcher    # tail the launcher Lambda's log (us-east-1) — is it being invoked?
+just logs-minecraft   # tail the server's own log — needs debug = true in terraform.tfvars
+just logs-watchdog    # tail the watchdog's log — start/shutdown decisions, DNS updates
 just sns-status       # confirmed vs PendingConfirmation on the email subscription
 just output [name]    # all outputs, or one by name (e.g. server_address)
 ```
