@@ -12,6 +12,12 @@ locals {
   # cloudflare_api_token was never set. Substitute an obviously-fake
   # placeholder in that case; it's never used for a real request.
   cloudflare_api_token = var.cloudflare_api_token != "" ? var.cloudflare_api_token : "unused-manage_cloudflare_dns-is-false-000"
+
+  # Only the *presence* of a webhook URL, not the URL itself — see the
+  # matching local in modules/notifications/main.tf for why this needs
+  # nonsensitive() (otherwise sns_topic_configured below, and anything that
+  # reads it, inherits sensitivity from discord_webhook_url for no reason).
+  discord_enabled = nonsensitive(var.discord_webhook_url != "")
 }
 
 provider "aws" {

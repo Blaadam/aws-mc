@@ -144,6 +144,8 @@ The four values should match (can take a few minutes to propagate).
 | `shutdown_minutes` | `10` | Idle time before scale-to-zero |
 | `use_fargate_spot` | `true` | ~1.5c/hr vs ~5c/hr on-demand |
 | `sns_email_address` | `""` | Email confirmation is required before you'll receive anything — check spam for it |
+| `discord_webhook_url` | `""` | Relays the same start/stop notification to Discord — independent of `sns_email_address`, so it works with or without email too |
+| `discord_message` | `""` | Optional text prepended above the notification in Discord (e.g. `@everyone`). No effect when `discord_webhook_url` is unset |
 | `container_insights` | `false` | Off by default; bills per custom metric |
 | `minecraft_image_env_vars` | `{ EULA = "TRUE" }` | Any itzg image setting goes here — see [Customizing the server](#customizing-the-server) |
 | `aws_region` | `eu-west-2` | Where the core stack runs. Route 53 query logging always uses us-east-1 regardless — an AWS constraint, not a setting |

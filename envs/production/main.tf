@@ -16,8 +16,10 @@ module "storage" {
 module "notifications" {
   source = "../../modules/notifications"
 
-  project_name      = var.project_name
-  sns_email_address = var.sns_email_address
+  project_name        = var.project_name
+  sns_email_address   = var.sns_email_address
+  discord_webhook_url = var.discord_webhook_url
+  discord_message     = var.discord_message
 }
 
 # Runs entirely in us-east-1: Route 53 query logging requires the
@@ -70,8 +72,9 @@ module "ecs" {
   sns_topic_arn = module.notifications.topic_arn
   # Not var.sns_topic_arn != "" — on the topic's first apply its ARN is
   # unknown at plan time, and count can't depend on an unknown value.
-  # sns_email_address is a plain input variable, always known.
-  sns_topic_configured = var.sns_email_address != ""
+  # sns_email_address/discord_webhook_url are plain input variables, always
+  # known — mirrors modules/notifications' own topic-creation condition.
+  sns_topic_configured = var.sns_email_address != "" || local.discord_enabled
 }
 
 # Breaks the storage <-> ecs module cycle: neither module knows about the

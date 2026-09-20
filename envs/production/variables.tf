@@ -70,11 +70,24 @@ variable "vpc_id" {
 variable "minecraft_image_env_vars" {
   description = "Extra environment variables passed to the itzg/minecraft-server (or -bedrock-server) container. Was MINECRAFT_IMAGE_ENV_VARS_JSON (a JSON string there; a native map here)."
   type        = map(string)
-  default     = { EULA = "TRUE", MOTD: "§6aws-mc§r\n§7Check out github.com/Blaadam/aws-mc" }
+  default     = { EULA = "TRUE", MOTD : "§6aws-mc§r\n§7Check out github.com/Blaadam/aws-mc" }
 }
 
 variable "sns_email_address" {
   description = "Email address for server-ready notifications. Leave empty to skip creating the SNS topic/subscription. Was SNS_EMAIL_ADDRESS."
+  type        = string
+  default     = ""
+}
+
+variable "discord_webhook_url" {
+  description = "Discord webhook URL to relay start/stop notifications to (fans out from the same SNS topic as sns_email_address, independently of it). Leave empty to skip creating the forwarder Lambda entirely."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "discord_message" {
+  description = "Optional text prepended above the watchdog's actual start/stop message in the Discord post (e.g. an @everyone ping). Leave empty to relay the watchdog's message unmodified. No effect when discord_webhook_url is empty."
   type        = string
   default     = ""
 }

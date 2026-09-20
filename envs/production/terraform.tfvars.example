@@ -19,6 +19,13 @@ aws_region = "eu-west-2"
 
 sns_email_address = "you@example.com"
 
+# Relays the same start/stop notification to Discord instead of (or as well
+# as) email — only created when discord_webhook_url is set. discord_message
+# is optional flavor text (e.g. an @everyone ping) prepended above the
+# actual "online"/"shutting down" line; leave it unset to relay as-is.
+# discord_webhook_url = "https://discord.com/api/webhooks/..."
+# discord_message     = "@everyone"
+
 # Defaults (task_cpu=512, task_memory=1024, shutdown_minutes=10,
 # container_insights=false) are tuned for lowest cost on a small hobby
 # server. Uncomment any of these for more headroom/reliability instead:
