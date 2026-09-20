@@ -70,7 +70,7 @@ variable "vpc_id" {
 variable "minecraft_image_env_vars" {
   description = "Extra environment variables passed to the itzg/minecraft-server (or -bedrock-server) container. Was MINECRAFT_IMAGE_ENV_VARS_JSON (a JSON string there; a native map here)."
   type        = map(string)
-  default     = { EULA = "TRUE" }
+  default     = { EULA = "TRUE", MOTD: "§6aws-mc§r\n§7Check out github.com/Blaadam/aws-mc" }
 }
 
 variable "sns_email_address" {
