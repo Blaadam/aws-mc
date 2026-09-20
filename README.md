@@ -150,7 +150,7 @@ The four values should match (can take a few minutes to propagate).
 | `minecraft_image_env_vars` | `{ EULA = "TRUE" }` | Any itzg image setting goes here — see [Customizing the server](#customizing-the-server) |
 | `aws_region` | `eu-west-2` | Where the core stack runs. Route 53 query logging always uses us-east-1 regardless — an AWS constraint, not a setting |
 | `rcon_allowed_cidrs` | `[]` | CIDR blocks allowed to reach RCON (25575/tcp) — closed by default, nothing in this stack needs it open. Set to your own IP (e.g. `["203.0.113.4/32"]`) to run admin commands yourself via `mcrcon`. Never `0.0.0.0/0` — RCON auth is a plaintext password |
-| `enable_start_api` | `false` | Public HTTP URL that starts the server (see [Manual start](#manual-start)). No AWS auth on the URL — gated by a generated `?token=` instead. Start-only |
+| `enable_start_api` | `false` | Public HTTP URL that starts the server (see [Manual start](#manual-start)). No AWS auth on the URL — gated by a generated `?token=` instead. Start-only. When also set alongside `discord_webhook_url`, the Discord shutdown notification gets a "Restart server" button linking straight to it |
 
 Changing any of these is `just plan` / `just apply`; most take effect on
 the next server restart, not live (Fargate task definitions are immutable —

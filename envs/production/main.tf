@@ -20,6 +20,12 @@ module "notifications" {
   sns_email_address   = var.sns_email_address
   discord_webhook_url = var.discord_webhook_url
   discord_message     = var.discord_message
+  # null when enable_start_api is false — start_api_url's type is string,
+  # not string?, so that has to become "" rather than pass through as null.
+  start_api_url = coalesce(module.dns_trigger.start_api_url, "")
+  # Reuses the same ICON already set for the server's own list entry — one
+  # source of truth instead of a second URL to keep in sync.
+  icon_url = lookup(var.minecraft_image_env_vars, "ICON", "")
 }
 
 # Runs entirely in us-east-1: Route 53 query logging requires the

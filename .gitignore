@@ -18,6 +18,7 @@ terraform.rc
 
 # Lambda build artifacts
 modules/**/dist/
+__pycache__/
 
 # OS
 .DS_Store

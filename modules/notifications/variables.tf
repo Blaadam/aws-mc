@@ -21,6 +21,19 @@ variable "discord_message" {
   default     = ""
 }
 
+variable "start_api_url" {
+  description = "Ready-to-use start URL (dns-trigger's start_api_url output, empty when enable_start_api is false). When set, the Discord shutdown notification gets a link-style \"Restart server\" button pointing at it. No effect when discord_webhook_url is empty."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "icon_url" {
+  description = "Server icon URL (minecraft_image_env_vars[\"ICON\"], if set) — shown as a thumbnail on the Discord notification card. No effect when discord_webhook_url is empty."
+  type        = string
+  default     = ""
+}
+
 variable "log_retention_days" {
   type    = number
   default = 3

@@ -80,6 +80,8 @@ resource "aws_lambda_function" "discord" {
     variables = {
       WEBHOOK_URL    = var.discord_webhook_url
       CUSTOM_MESSAGE = var.discord_message
+      START_API_URL  = var.start_api_url
+      ICON_URL       = var.icon_url
     }
   }
 
