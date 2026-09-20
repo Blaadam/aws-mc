@@ -87,6 +87,7 @@ resource "aws_ecs_cluster" "this" {
 resource "aws_cloudwatch_log_group" "exec" {
   name              = "/ecs/${var.cluster_name}/exec"
   retention_in_days = var.log_retention_days
+  log_group_class   = "INFREQUENT_ACCESS"
 }
 
 resource "aws_ecs_cluster_capacity_providers" "this" {
@@ -303,6 +304,7 @@ resource "aws_cloudwatch_log_group" "minecraft" {
 
   name              = "/ecs/${var.cluster_name}/minecraft-server"
   retention_in_days = var.log_retention_days
+  log_group_class   = "INFREQUENT_ACCESS"
 }
 
 resource "aws_cloudwatch_log_group" "watchdog" {
@@ -310,6 +312,7 @@ resource "aws_cloudwatch_log_group" "watchdog" {
 
   name              = "/ecs/${var.cluster_name}/minecraft-ecsfargate-watchdog"
   retention_in_days = var.log_retention_days
+  log_group_class   = "INFREQUENT_ACCESS"
 }
 
 # --- Task + service ----------------------------------------------------

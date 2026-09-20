@@ -34,6 +34,8 @@ resource "aws_cloudwatch_log_resource_policy" "route53" {
 resource "aws_cloudwatch_log_group" "query_log" {
   name              = "/aws/route53/${local.subdomain}"
   retention_in_days = var.log_retention_days
+  # Must stay STANDARD, not INFREQUENT_ACCESS: the subscription filter below
+  # that wakes the server is unsupported on Infrequent Access log groups.
 
   depends_on = [aws_cloudwatch_log_resource_policy.route53]
 }
@@ -103,6 +105,7 @@ resource "aws_iam_role_policy_attachment" "launcher_logs" {
 resource "aws_cloudwatch_log_group" "launcher" {
   name              = "/aws/lambda/${var.subdomain_part}-launcher"
   retention_in_days = var.log_retention_days
+  log_group_class   = "INFREQUENT_ACCESS"
 }
 
 resource "aws_lambda_function" "launcher" {
