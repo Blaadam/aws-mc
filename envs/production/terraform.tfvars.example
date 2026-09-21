@@ -52,3 +52,13 @@ sns_email_address = "you@example.com"
 # sns_email_address/discord_webhook_url when either is set.
 # enable_observability     = true
 # long_running_alarm_hours = 6
+
+# Scaffolds a scheduled AWS Backup plan for the world-data EFS volume. Off
+# by default — real recurring cost (~$0.05/GB-month retained, incremental
+# after the first backup), separate from EFS's own storage-class lifecycle
+# (that's about cost, not backup history/durability). Pick any days —
+# once a week, a couple days a week, whatever you want:
+# enable_backup         = true
+# backup_days_of_week   = ["SUN"]          # or e.g. ["MON", "THU"]
+# backup_hour           = 9                # UTC
+# backup_retention_days = 30

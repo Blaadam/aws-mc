@@ -440,6 +440,35 @@ phase, just worth doing.
     CloudWatch's long-stable, well-documented format, not a newer surface
     like the Discord Components V2 work above, so confidence is high, but
     it's still first-apply-unverified.
+  - A follow-up whole-repo Checkov run (not just `modules/observability`
+    in isolation) turned up `CKV_AWS_65` (ECS Container Insights) —
+    pre-existing, not caused by this module: the *previous* session's cost
+    pass turned `container_insights` off by default but never re-ran
+    Checkov against that change. Triaged and skipped (same "AWS-managed
+    over cost" bucket as everything else in `.checkov.yaml`), since
+    `enable_observability`'s dashboard already covers CPU/memory without
+    it.
+
+- **AWS Backup added as a new opt-in `backup` module, `var.enable_backup`
+  (default `false`).** Same "small real cost, not everyone wants it"
+  reasoning and `count`-on-the-module-call pattern as `observability`
+  above. Backs up the world-data EFS volume on a schedule you pick
+  (`backup_days_of_week`, e.g. `["SUN"]` or `["MON", "THU"]`; `backup_hour`,
+  UTC) via a 6-field AWS Backup cron (`cron(0 H ? * DAYS *)`), retained for
+  `backup_retention_days` (default 30) before AWS Backup deletes the
+  recovery point automatically. Deliberately distinct from the EFS
+  lifecycle policy already in `modules/storage` — that's a storage-*class*
+  optimization (Standard → IA after 30 days idle), not backup history; it
+  does nothing for "I deleted the wrong thing" or a corrupted world.
+  IAM role only gets `AWSBackupServiceRolePolicyForBackup`, not the
+  restore policy too — restoring is a rare, manual, "you're already in the
+  console for this" action, not something worth standing permission for.
+  Backup vault uses the AWS-managed `aws/backup` key (`CKV_AWS_166` added
+  to `.checkov.yaml`, same KMS-cost bucket as everything else there); the
+  EFS filesystem itself is deliberately not enrolled in a backup plan when
+  `enable_backup` is false, which fails `CKV2_AWS_18` by design — added to
+  `.checkov.yaml` alongside the others that trade a Checkov pass for an
+  explicit cost choice.
 
 ## Inspiration repo
 

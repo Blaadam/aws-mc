@@ -14,6 +14,7 @@ skip-check:
   - CKV_AWS_145 # S3 bucket default KMS encryption
   - CKV_AWS_173 # Lambda environment variable KMS encryption
   - CKV_AWS_224 # ECS Exec session logging (client<->container) KMS encryption
+  - CKV_AWS_166 # AWS Backup vault KMS CMK — uses the AWS-managed "aws/backup" key
 
   # --- Log/data durability features: cost not justified for this project. ---
   - CKV_AWS_338 # CloudWatch log group retention >= 1 year
@@ -42,6 +43,10 @@ skip-check:
   # since it bills per custom CloudWatch metric on a server that's mostly scaled to
   # zero; var.enable_observability's dashboard covers CPU/memory without it. Turn
   # container_insights on locally if you want the finer-grained view for debugging.
+  - CKV2_AWS_18 # EFS in an AWS Backup plan — off by default (var.enable_backup),
+  # since backup storage is billed per GB-month retained; the EFS lifecycle policy
+  # already in modules/storage covers storage-class cost, not backup history/
+  # durability. Turn enable_backup on if you want scheduled world-data backups.
 
   # --- False positive for this design. ---
   - CKV2_AWS_23 # Route53 A record "has no attached resource" — watchdog owns it at runtime

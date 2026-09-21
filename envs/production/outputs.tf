@@ -43,3 +43,8 @@ output "start_api_url" {
 output "dashboard_url" {
   value = var.enable_observability ? module.observability[0].dashboard_url : null
 }
+
+# null unless var.enable_backup is true.
+output "backup_vault_name" {
+  value = var.enable_backup ? module.backup[0].vault_name : null
+}

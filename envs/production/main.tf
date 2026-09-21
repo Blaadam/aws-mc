@@ -102,6 +102,22 @@ module "observability" {
   long_running_alarm_hours = var.long_running_alarm_hours
 }
 
+# Opt-in, same reasoning as observability above: not everyone wants the
+# extra storage cost or needs the durability (this protects against a
+# corrupted world or a mistake — EFS's own IA lifecycle policy in
+# modules/storage is about storage class, not backup history).
+module "backup" {
+  count  = var.enable_backup ? 1 : 0
+  source = "../../modules/backup"
+
+  project_name        = var.project_name
+  efs_file_system_arn = module.storage.file_system_arn
+
+  backup_days_of_week   = var.backup_days_of_week
+  backup_hour           = var.backup_hour
+  backup_retention_days = var.backup_retention_days
+}
+
 # Breaks the storage <-> ecs module cycle: neither module knows about the
 # other, this rule connects their security groups from the root.
 resource "aws_vpc_security_group_ingress_rule" "efs_from_ecs" {

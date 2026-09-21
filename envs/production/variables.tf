@@ -186,3 +186,27 @@ variable "long_running_alarm_hours" {
   type        = number
   default     = 6
 }
+
+variable "enable_backup" {
+  description = "Scaffolds an AWS Backup plan for the world-data EFS volume, on backup_days_of_week/backup_hour, retained for backup_retention_days. Off by default — not everyone wants the extra storage cost (~$0.05/GB-month retained, incremental after the first backup) or needs it (EFS's own lifecycle policy is about storage class, not durability/history — this is what actually protects against a corrupted world or a mistake, not scaling to zero)."
+  type        = bool
+  default     = false
+}
+
+variable "backup_days_of_week" {
+  description = "Days of the week to run the world-data backup, as AWS Backup cron day-of-week codes (e.g. [\"SUN\"] for once a week, [\"MON\", \"THU\"] for twice). No effect when enable_backup is false."
+  type        = list(string)
+  default     = ["SUN"]
+}
+
+variable "backup_hour" {
+  description = "UTC hour (0-23) the backup job starts. No effect when enable_backup is false."
+  type        = number
+  default     = 9
+}
+
+variable "backup_retention_days" {
+  description = "How long backup recovery points are kept before deletion — the main cost lever for enable_backup. No effect when enable_backup is false."
+  type        = number
+  default     = 30
+}

@@ -210,3 +210,17 @@ dashboard-url:
     fi
     terraform -chdir=envs/production output -raw dashboard_url
     echo
+
+# List world-data recovery points and when the next backup is scheduled.
+# Only exists when enable_backup = true in terraform.tfvars.
+backup-status:
+    #!/usr/bin/env sh
+    set -e
+    if ! terraform -chdir=envs/production output -json backup_vault_name >/dev/null 2>&1; then
+        echo "No backup vault — set enable_backup = true in terraform.tfvars and apply first."
+        exit 1
+    fi
+    vault=$(terraform -chdir=envs/production output -raw backup_vault_name | tr -cd 'A-Za-z0-9._-')
+    aws backup list-recovery-points-by-backup-vault --backup-vault-name "$vault" \
+        --query "RecoveryPoints[].{Status:Status,Created:CreationDate,ExpiresAt:CalculatedLifecycle.DeleteAt}" \
+        --output table
