@@ -198,3 +198,15 @@ sns-status:
     fi
     aws sns list-subscriptions-by-topic --topic-arn "$topic" \
         --query "Subscriptions[].{Endpoint:Endpoint,Status:SubscriptionArn}" --output table
+
+# Print the CloudWatch dashboard's console URL. Only exists when
+# enable_observability = true in terraform.tfvars.
+dashboard-url:
+    #!/usr/bin/env sh
+    set -e
+    if ! terraform -chdir=envs/production output -json dashboard_url >/dev/null 2>&1; then
+        echo "No dashboard — set enable_observability = true in terraform.tfvars and apply first."
+        exit 1
+    fi
+    terraform -chdir=envs/production output -raw dashboard_url
+    echo

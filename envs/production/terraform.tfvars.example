@@ -45,3 +45,10 @@ sns_email_address = "you@example.com"
 # generated shared-secret token, not AWS auth — after apply, get the
 # ready-to-bookmark URL with `just start-url`. Start-only for now.
 # enable_start_api = true
+
+# Scaffolds a CloudWatch dashboard + alarms (launcher/Discord-notify Lambda
+# errors, a long-running safety net). Off by default — small but non-zero
+# extra cost, so it's opt-in. Alarms notify the same topic as
+# sns_email_address/discord_webhook_url when either is set.
+# enable_observability     = true
+# long_running_alarm_hours = 6

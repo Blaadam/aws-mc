@@ -83,6 +83,25 @@ module "ecs" {
   sns_topic_configured = var.sns_email_address != "" || local.discord_enabled
 }
 
+# Task 2.5 (docs/PROJECT_PLAN.md) — opt-in: some deployments won't want the
+# (small, but non-zero) extra CloudWatch cost. count on the module itself
+# rather than threading an "enabled" flag through every resource inside it.
+module "observability" {
+  count  = var.enable_observability ? 1 : 0
+  source = "../../modules/observability"
+
+  project_name = var.project_name
+  aws_region   = var.aws_region
+  cluster_name = var.project_name
+  service_name = "${var.project_name}-server"
+
+  launcher_function_name = module.dns_trigger.launcher_function_name
+  discord_function_name  = module.notifications.discord_function_name
+  sns_topic_arn          = module.notifications.topic_arn
+
+  long_running_alarm_hours = var.long_running_alarm_hours
+}
+
 # Breaks the storage <-> ecs module cycle: neither module knows about the
 # other, this rule connects their security groups from the root.
 resource "aws_vpc_security_group_ingress_rule" "efs_from_ecs" {

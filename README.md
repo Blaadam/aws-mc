@@ -112,6 +112,8 @@ The four values should match, although it can take a few minutes to propagate.
 | `aws_region`                                 | `eu-west-2`         | Where the core stack runs. Route 53 query logging always uses us-east-1 regardless — this is an AWS constraint, not a setting.                                                                                                                                                                   |
 | `rcon_allowed_cidrs`                         | `[]`                | CIDR blocks allowed to reach RCON (25575/tcp) — closed by default, because nothing in this stack needs it open. Set to your own IP (e.g. `["203.0.113.4/32"]`) if you want to run admin commands yourself via `mcrcon`. Never `0.0.0.0/0` — RCON auth is a plaintext password.                   |
 | `enable_start_api`                           | `false`             | Public HTTP URL that starts the server — see [Manual start](#manual-start). No AWS auth on the URL, it is gated by a generated `?token=` instead. Start-only. When set alongside `discord_webhook_url`, the Discord shutdown notification gets a "Restart server" button linking straight to it. |
+| `enable_observability`                       | `false`             | Scaffolds a CloudWatch dashboard plus alarms for launcher/Discord-notify Lambda errors and a long-running safety net. Small extra cost (CloudWatch's free tier covers 10 alarms/3 dashboards account-wide) — off by default so it stays opt-in. See `just dashboard-url` once enabled. |
+| `long_running_alarm_hours`                   | `6`                 | Hours the server can run continuously before the long-running safety-net alarm fires (catches a stuck watchdog, not long play sessions by itself — raise it if those are normal for you). No effect unless `enable_observability = true`. |
 
 Changing any of these is `just plan` / `just apply`; most take effect on the next server restart rather than live, because Fargate task definitions are immutable — a change creates a new revision, and a fresh task is needed to pick it up.
 
@@ -146,6 +148,7 @@ just logs-launcher   # tail the launcher Lambda's log (us-east-1) — is it bein
 just logs-minecraft  # tail the server's own log — needs debug = true in terraform.tfvars
 just logs-watchdog   # tail the watchdog's log — start/shutdown decisions, DNS updates
 just sns-status      # confirmed vs PendingConfirmation on the email subscription
+just dashboard-url   # print the CloudWatch dashboard URL — needs enable_observability = true
 just output [name]   # all outputs, or one by name (e.g. server_address)
 ```
 

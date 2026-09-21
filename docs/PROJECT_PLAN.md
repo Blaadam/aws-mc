@@ -53,7 +53,7 @@ containers themselves (reused as-is).
 | ~~2.2~~ | ~~Twilio creds → Secrets Manager; wire Twilio SMS Lambda~~ — dropped, see Decisions | — | — | — |
 | 2.3 | Upgrade launcher Lambda to Python 3.13; make idempotent | 1.4 | 1.5h | ✅ done |
 | 2.4 | Pin both containers by digest; log retention | 1.3 | 1h | ⬜ log retention done (Phase 1); digest pinning still open |
-| 2.5 | `observability`: CloudWatch dashboard + start/idle/error alarms | 1.8 | 3h | ⬜ not started |
+| 2.5 | `observability`: CloudWatch dashboard + start/idle/error alarms | 1.8 | 3h | ✅ done — opt-in via `var.enable_observability` (default `false`), see Decisions |
 | 2.6 | CI: add `tflint` + tfsec/Checkov + `plan` on PR | 0.5 | 2h | ⬜ `tflint`/Checkov done; live `plan` on PR deliberately deferred (needs OIDC, declined for now) |
 | 2.7 | README: variables, deploy, manual-start fallback, teardown | all | — | ✅ done |
 | 2.8 | Re-run functional test on hardened stack | 2.1–2.6 | 1.5h | ⬜ pending — needs a real `apply` first |
@@ -398,6 +398,48 @@ phase, just worth doing.
   `enable_start_api = true` actually set — Checkov reads the real
   `terraform.tfvars` off disk regardless of `.gitignore`) exercised the
   second permission statement for the first time.
+
+- **Task 2.5 done: `observability` module, opt-in via `var.enable_observability`
+  (default `false`).** Not everyone wants the extra CloudWatch line item, so
+  the whole module is gated with `count` at the call site in
+  `envs/production/main.tf` rather than threading an `enabled` flag through
+  every resource inside it — the module itself has no notion of being
+  "off." Three alarms plus one dashboard:
+  - Launcher Lambda `Errors` and (when `discord_webhook_url` is set)
+    Discord-notify Lambda `Errors` — straightforward, `treat_missing_data =
+    "notBreaching"` so a quiet function doesn't itself alarm.
+  - A "long-running" safety net, not a gameplay alarm: `AWS/ECS`
+    `CPUUtilization` is only published while the service has a running
+    task, so `datapoints_to_alarm` consecutive hourly periods of *any*
+    data (threshold `-1`, since CPU% is never negative — this alarms on
+    data being *present*, not on load) means the task has been up
+    continuously that whole time without scaling back to zero. Catches a
+    stuck watchdog (a Spot interruption mid-shutdown, a crash) racking up
+    charges silently — exactly the kind of thing a cost-conscious,
+    scale-to-zero project should want a tripwire for. Tunable via
+    `var.long_running_alarm_hours` (default 6h) since "normal" session
+    length varies.
+  - Dashboard has two widgets unconditionally (ECS CPU/memory, launcher
+    Lambda invocations/errors) plus a third for the Discord-notify Lambda,
+    added via `concat()` only when that function exists — a dashboard
+    widget pointing at a nonexistent function's metrics wouldn't error,
+    it'd just render empty, so this keeps it clean rather than leaving a
+    dead panel.
+  - Alarms publish to the same SNS topic `modules/notifications` already
+    owns (`sns_topic_arn`) rather than standing up a second notification
+    channel — so alarm state changes fan out to whichever of
+    email/Discord you already have configured, or nowhere (alarms still
+    exist and show in the console) if neither is set.
+  - No new Checkov findings — verified locally (`checkov -d
+    modules/observability`); metric alarms and dashboards aren't the kind
+    of resource Checkov's AWS ruleset has much to say about.
+  - Not done: the dashboard JSON couldn't be verified against a real
+    `apply` (no AWS credentials in the environment this was built in) —
+    the widget schema used (`type: "metric"`, `metrics` array of
+    `[Namespace, MetricName, DimName, DimValue, ..., {options}]`) is
+    CloudWatch's long-stable, well-documented format, not a newer surface
+    like the Discord Components V2 work above, so confidence is high, but
+    it's still first-apply-unverified.
 
 ## Inspiration repo
 

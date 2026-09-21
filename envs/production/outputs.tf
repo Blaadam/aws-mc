@@ -38,3 +38,8 @@ output "start_api_url" {
   value     = module.dns_trigger.start_api_url
   sensitive = true
 }
+
+# null unless var.enable_observability is true.
+output "dashboard_url" {
+  value = var.enable_observability ? module.observability[0].dashboard_url : null
+}

@@ -174,3 +174,15 @@ variable "enable_start_api" {
   type        = bool
   default     = false
 }
+
+variable "enable_observability" {
+  description = "Scaffolds a CloudWatch dashboard (ECS CPU/memory, Lambda invocations/errors) plus alarms for launcher/Discord-notify Lambda errors and a long-running safety net (see long_running_alarm_hours). Off by default — task 2.5 in docs/PROJECT_PLAN.md. Alarms notify the same SNS topic as sns_email_address/discord_webhook_url when either is set; with neither, alarms still exist in the console but notify nowhere. Small cost either way (CloudWatch's free tier covers 10 alarms and 3 dashboards account-wide) — see `just dashboard-url` once enabled."
+  type        = bool
+  default     = false
+}
+
+variable "long_running_alarm_hours" {
+  description = "Consecutive hours of continuous ECS CPUUtilization data before the long-running safety-net alarm fires (a stuck watchdog cost guard, not a gameplay limit). No effect when enable_observability is false."
+  type        = number
+  default     = 6
+}
