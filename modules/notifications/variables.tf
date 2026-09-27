@@ -34,6 +34,22 @@ variable "icon_url" {
   default     = ""
 }
 
+variable "ecs_cluster_arn" {
+  description = "Cluster the Minecraft service runs in — scopes the crash-notification EventBridge rule to this stack's tasks."
+  type        = string
+}
+
+variable "ecs_service_name" {
+  description = "Minecraft ECS service name — the crash rule matches its tasks' \"service:<name>\" group."
+  type        = string
+}
+
+variable "minecraft_container_name" {
+  description = "Name of the Minecraft container in the task definition (not the watchdog) — the one whose unexpected stop triggers a crash notification."
+  type        = string
+  default     = "minecraft-server"
+}
+
 variable "log_retention_days" {
   type    = number
   default = 3

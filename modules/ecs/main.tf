@@ -1,18 +1,40 @@
 locals {
   edition = {
     java = {
-      image    = "itzg/minecraft-server"
-      port     = 25565
-      protocol = "tcp"
+      image       = "itzg/minecraft-server"
+      port        = 25565
+      protocol    = "tcp"
+      entry_point = ["/bin/bash", "-c", local.modrinth_fallback_start]
     }
     bedrock = {
-      image    = "itzg/minecraft-bedrock-server"
-      port     = 19132
-      protocol = "udp"
+      image       = "itzg/minecraft-bedrock-server"
+      port        = 19132
+      protocol    = "udp"
+      entry_point = null
     }
   }
-  server    = local.edition[var.minecraft_edition]
-  rcon_port = 25575
+  server = local.edition[var.minecraft_edition]
+
+  # itzg's start script resolves MODRINTH_PROJECTS on every boot under
+  # `set -e`, so a Modrinth API outage kills startup (exit 1) even though the
+  # mods are already on EFS. Probe the API first and, if it's unreachable,
+  # unset MODRINTH_PROJECTS so the image skips that step and boots with the
+  # jars already in /data/mods (REMOVE_OLD_MODS defaults to false, so they're
+  # kept). `exec` keeps the real start script as the signal target, so
+  # SIGTERM on scale-down still saves the world. Probes /version specifically:
+  # in the 2026-09-26 outage /v2/project/<id> answered but /version (what
+  # mc-image-helper actually calls) timed out.
+  modrinth_fallback_start = <<-EOT
+    if [ -n "$MODRINTH_PROJECTS" ]; then
+      probe=$(printf '%s' "$MODRINTH_PROJECTS" | tr ', ' '\n\n' | grep -m1 . | cut -d: -f1)
+      if ! curl -fsS --retry 2 --max-time 15 -o /dev/null "https://api.modrinth.com/v2/project/$probe/version"; then
+        echo "[modrinth-fallback] Modrinth API unreachable; skipping MODRINTH_PROJECTS and starting with existing /data/mods"
+        unset MODRINTH_PROJECTS
+      fi
+    fi
+    exec /image/scripts/start
+  EOT
+  rcon_port               = 25575
 
   # Guarded by var.debug itself, not just where these get used below —
   # aws_cloudwatch_log_group.minecraft/watchdog have count = 0 when
@@ -369,6 +391,7 @@ resource "aws_ecs_task_definition" "this" {
           initProcessEnabled = true
         }
       },
+      local.server.entry_point != null ? { entryPoint = local.server.entry_point } : {},
       var.debug ? { logConfiguration = local.mc_log_config } : {}
     ),
     merge(

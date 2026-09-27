@@ -8,6 +8,11 @@ output "hosted_zone_name_servers" {
   value       = module.dns_trigger.hosted_zone_name_servers
 }
 
+output "aws_region" {
+  description = "Region the core stack (ECS, EFS, container logs) runs in — used by the just logs-* recipes."
+  value       = var.aws_region
+}
+
 output "ecs_cluster_name" {
   value = module.ecs.cluster_name
 }

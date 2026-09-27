@@ -19,23 +19,37 @@ IS_COMPONENTS_V2 = 1 << 15
 
 GREEN = 0x57F287
 RED = 0xED4245
+ORANGE = 0xE67E22
+
+# Must match SUBJECT in ../crash_lambda/lambda_function.py. Keyed on the
+# SNS Subject rather than message text, since this one is ours to control.
+CRASH_SUBJECT = "Minecraft server crashed"
 
 
 def lambda_handler(event, context):
     """Relays the watchdog's SNS notification (server online / shutting
-    down) to a Discord webhook as a Components V2 card: a color-accented
-    Container with the server icon as a thumbnail, and — on the shutdown
-    message only, when enable_start_api created a URL to point at — a
-    one-tap restart button. One invocation per SNS record, same as the
-    email subscription this fans out alongside."""
+    down), plus crash_lambda's crash notification, to a Discord webhook as
+    a Components V2 card: a color-accented Container with the server icon
+    as a thumbnail, and — on the shutdown/crash messages only, when
+    enable_start_api created a URL to point at — a one-tap restart button.
+    One invocation per SNS record, same as the email subscription this fans
+    out alongside."""
     for record in event["Records"]:
         message = record["Sns"]["Message"]
+        is_crash = record["Sns"].get("Subject") == CRASH_SUBJECT
         # Matches the watchdog's own hardcoded wording (doctorray117/
         # minecraft-ondemand's watchdog.sh), not something this project
         # controls.
         is_shutdown = "Shutting down" in message
 
-        text = [{"type": TEXT_DISPLAY, "content": "### " + ("🔴 Server shutting down" if is_shutdown else "🟢 Server online")}]
+        if is_crash:
+            title, color = "⚠️ Server crashed", ORANGE
+        elif is_shutdown:
+            title, color = "🔴 Server shutting down", RED
+        else:
+            title, color = "🟢 Server online", GREEN
+
+        text = [{"type": TEXT_DISPLAY, "content": "### " + title}]
         if CUSTOM_MESSAGE:
             text.append({"type": TEXT_DISPLAY, "content": CUSTOM_MESSAGE})
         text.append({"type": TEXT_DISPLAY, "content": message})
@@ -53,7 +67,9 @@ def lambda_handler(event, context):
         else:
             container_children = text
 
-        if is_shutdown and START_API_URL:
+        # On a crash too: a startup crash from a transient outage (e.g.
+        # Modrinth) often succeeds on the next try.
+        if (is_shutdown or is_crash) and START_API_URL:
             container_children.append({"type": SEPARATOR})
             container_children.append(
                 {
@@ -74,7 +90,7 @@ def lambda_handler(event, context):
             "components": [
                 {
                     "type": CONTAINER,
-                    "accent_color": RED if is_shutdown else GREEN,
+                    "accent_color": color,
                     "components": container_children,
                 }
             ],

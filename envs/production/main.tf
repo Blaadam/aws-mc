@@ -26,6 +26,13 @@ module "notifications" {
   # Reuses the same ICON already set for the server's own list entry — one
   # source of truth instead of a second URL to keep in sync.
   icon_url = lookup(var.minecraft_image_env_vars, "ICON", "")
+
+  # For the crash-notification rule. Not a module cycle even though ecs
+  # also reads topic_arn from here: Terraform resolves dependencies per
+  # value, and the event rule (needs the cluster) and the task definition
+  # (needs the topic) don't depend on each other.
+  ecs_cluster_arn  = module.ecs.cluster_arn
+  ecs_service_name = module.ecs.service_name
 }
 
 # Runs entirely in us-east-1: Route 53 query logging requires the

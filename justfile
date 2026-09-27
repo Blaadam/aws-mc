@@ -148,22 +148,45 @@ logs-dns:
     subdomain=$(terraform -chdir=envs/production output -raw server_address | tr -cd 'A-Za-z0-9._/#-')
     aws logs tail "/aws/route53/$subdomain" --region us-east-1 --since 15m --follow
 
-# Tail the launcher Lambda's log — shows whether it's being invoked at all,
-# and any errors if it is. Also always us-east-1.
-logs-launcher:
+# The launcher, minecraft and watchdog log groups are INFREQUENT_ACCESS
+# class (half the ingestion price), which only supports Logs Insights
+# queries. `aws logs tail`, get-log-events and filter-log-events all fail
+# on them with "only supported on the Standard log class", so these
+# recipes run an Insights query and print the result instead of following
+# live. Insights can lag a minute or two behind the newest lines. If the
+# output ends suspiciously early, run it again. `minutes` is how far back
+# to look (default 30), e.g. `just logs-minecraft 120`.
+[private]
+logs-insights group region minutes:
+    #!/usr/bin/env sh
+    set -e
+    now=$(date +%s)
+    id=$(aws logs start-query --region "{{region}}" --log-group-name "{{group}}"         --start-time $((now - {{minutes}} * 60)) --end-time "$now"         --query-string 'fields @timestamp, @message | sort @timestamp asc | limit 10000'         --query queryId --output text)
+    while :; do
+        status=$(aws logs get-query-results --region "{{region}}" --query-id "$id" --query status --output text)
+        case "$status" in Complete|Failed|Cancelled|Timeout) break ;; esac
+        sleep 2
+    done
+    # results[*], not results[] — the latter flattens each row's
+    # {field, value} pairs into one list and every column comes back None.
+    aws logs get-query-results --region "{{region}}" --query-id "$id"         --query "results[*].[ [?field=='@timestamp'].value | [0], [?field=='@message'].value | [0] ]"         --output text
+
+# Always us-east-1.
+# Launcher Lambda's recent log — is it being invoked, and any errors
+logs-launcher minutes="30":
     #!/usr/bin/env sh
     set -e
     fn=$(terraform -chdir=envs/production output -raw launcher_function_name | tr -cd 'A-Za-z0-9._/#-')
-    aws logs tail "/aws/lambda/$fn" --region us-east-1 --since 15m --follow
+    just logs-insights "/aws/lambda/$fn" us-east-1 "{{minutes}}"
 
-# Tail the minecraft-server container's own log (server startup, world
-# loading, player join/leave). Only exists when debug = true in
-# terraform.tfvars — these log groups aren't created otherwise. A null
-# Terraform output isn't stored in state at all, and `output -raw` on a
-# name that's absent prints a warning to stdout and exits 0 rather than
-# failing — so existence is checked with `output -json` (which does error
-# correctly on a missing output) before trusting `-raw` for the value.
-logs-minecraft:
+# Only exists when debug = true in terraform.tfvars — these log groups
+# aren't created otherwise. A null Terraform output isn't stored in state
+# at all, and `output -raw` on a name that's absent prints a warning to
+# stdout and exits 0 rather than failing — so existence is checked with
+# `output -json` (which does error correctly on a missing output) before
+# trusting `-raw` for the value.
+# Server's recent log — startup, world load, joins, and why it crashed
+logs-minecraft minutes="30":
     #!/usr/bin/env sh
     set -e
     if ! terraform -chdir=envs/production output -json minecraft_log_group_name >/dev/null 2>&1; then
@@ -171,11 +194,12 @@ logs-minecraft:
         exit 1
     fi
     group=$(terraform -chdir=envs/production output -raw minecraft_log_group_name | tr -cd 'A-Za-z0-9._/#-')
-    aws logs tail "$group" --since 15m --follow
+    region=$(terraform -chdir=envs/production output -raw aws_region | tr -cd 'a-z0-9-')
+    just logs-insights "$group" "$region" "{{minutes}}"
 
-# Tail the watchdog sidecar's log (start/shutdown decisions, DNS updates,
-# Spot interruption handling). Same debug = true requirement as above.
-logs-watchdog:
+# Same debug = true requirement as logs-minecraft.
+# Watchdog's recent log — start/shutdown decisions, DNS updates, Spot
+logs-watchdog minutes="30":
     #!/usr/bin/env sh
     set -e
     if ! terraform -chdir=envs/production output -json watchdog_log_group_name >/dev/null 2>&1; then
@@ -183,7 +207,8 @@ logs-watchdog:
         exit 1
     fi
     group=$(terraform -chdir=envs/production output -raw watchdog_log_group_name | tr -cd 'A-Za-z0-9._/#-')
-    aws logs tail "$group" --since 15m --follow
+    region=$(terraform -chdir=envs/production output -raw aws_region | tr -cd 'a-z0-9-')
+    just logs-insights "$group" "$region" "{{minutes}}"
 
 # Review the SNS topic's subscription statuses — shows whether the email
 # subscription is confirmed or pending. If the subscription is pending, check

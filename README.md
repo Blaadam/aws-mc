@@ -26,7 +26,7 @@ The path from step 2 to step 3 travels through CloudWatch Logs delivery, which i
 
 - [Terraform](https://developer.hashicorp.com/terraform/install) ≥1.10, [`just`](https://github.com/casey/just), and the AWS CLI. These are needed because the deployment is driven entirely by Terraform, and the [justfile](justfile) wraps the common commands so they are consistent.
 - The [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) — this is only required for `just console`, because ECS Exec relies on it.
-- An AWS account. This project touches VPC/EC2, ECS, EFS, Route 53, Lambda, SNS, CloudWatch Logs, S3, IAM, and Resource Groups, so the deploy identity needs a fairly broad set of permissions. If you prefer a dedicated IAM user rather than granting `AdministratorAccess`, you can attach: `AmazonVPCFullAccess`, `AmazonECS_FullAccess`, `AmazonElasticFileSystemFullAccess`, `AmazonRoute53FullAccess`, `AWSLambda_FullAccess`, `AmazonSNSFullAccess`, `CloudWatchLogsFullAccess`, `AmazonS3FullAccess`, `IAMFullAccess`, and `AWSResourceGroupsandTagEditorFullAccess`. (`IAMFullAccess` is unavoidably broad — this stack creates and passes IAM roles to Lambda and ECS, so the deploy identity is inherently powerful; see [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the caveat.)
+- An AWS account. This project touches VPC/EC2, ECS, EFS, Route 53, Lambda, SNS, CloudWatch Logs, S3, IAM, and Resource Groups, so the deploy identity needs a fairly broad set of permissions. If you prefer a dedicated IAM user rather than granting `AdministratorAccess`, you can attach: `AmazonVPCFullAccess`, `AmazonECS_FullAccess`, `AmazonElasticFileSystemFullAccess`, `AmazonRoute53FullAccess`, `AWSLambda_FullAccess`, `AmazonSNSFullAccess`, `CloudWatchLogsFullAccess`, `AmazonS3FullAccess`, `IAMFullAccess`, and `AWSResourceGroupsandTagEditorFullAccess`, plus EventBridge rule permissions for the [crash notification](#troubleshooting) (`events:PutRule`, `DeleteRule`, `DescribeRule`, `PutTargets`, `RemoveTargets`, `ListTargetsByRule`, `TagResource`, `UntagResource`, `ListTagsForResource`). `AmazonECS_FullAccess` includes those actions, but only for ECS's own `ecs-managed-*` rules, so it doesn't cover this one. An IAM group can hold only 10 managed policies, so if you attach all of the above to one group, add the EventBridge actions as an inline policy scoped to `arn:aws:events:*:<account-id>:rule/<project_name>-*` instead of attaching `AmazonEventBridgeFullAccess`. (`IAMFullAccess` is unavoidably broad — this stack creates and passes IAM roles to Lambda and ECS, so the deploy identity is inherently powerful; see [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the caveat.)
 - A domain, with nothing currently at `<subdomain_part>.<domain_name>` (the default subdomain is `minecraft`) — that name needs to be free because Route 53 is going to delegate it as a child Hosted Zone. If it is on **Cloudflare** and you want delegation automated (`manage_cloudflare_dns = true`), you will also need the zone's **Zone ID** (dashboard → Overview → right sidebar) and an **API token** scoped to `Zone → DNS → Edit` for that zone (dashboard → My Profile → API Tokens → Create Token → "Edit zone DNS" template). Anywhere else (Route 53 itself, Namecheap, GoDaddy, etc.), leave `manage_cloudflare_dns` at its default (`false`) and delegate manually — see [Deploy](#deploy).
 
 ## Credentials
@@ -50,7 +50,7 @@ modules/networking/   New VPC (public subnets, no NAT) or reuse an existing one.
 modules/storage/      EFS and an access point for the world data.
 modules/dns-trigger/  Route 53 child zone, query logging, and the launcher Lambda (us-east-1).
 modules/ecs/          Cluster, task definition (Minecraft + watchdog), and Fargate Spot service.
-modules/notifications/SNS email topic and Discord relay Lambda.
+modules/notifications/SNS email topic, Discord relay Lambda, and the crash-notification rule + Lambda.
 justfile              Every command below is in here — run `just` or `just --list` to see them all.
 docs/PROJECT_PLAN.md  Full milestone/task breakdown and locked-in decisions.
 ```
@@ -105,7 +105,7 @@ The four values should match, although it can take a few minutes to propagate.
 | `shutdown_minutes`                           | `10`                | Idle time before scale-to-zero.                                                                                                                                                                                                                                                                  |
 | `use_fargate_spot`                           | `true`              | ~1.5c/hr vs ~5c/hr on-demand.                                                                                                                                                                                                                                                                    |
 | `sns_email_address`                          | `""`                | Email confirmation is required before you'll receive anything — check spam for it.                                                                                                                                                                                                               |
-| `discord_webhook_url`                        | `""`                | Relays the same start/stop notification to Discord — it is independent of `sns_email_address`, so it works with or without email too.                                                                                                                                                            |
+| `discord_webhook_url`                        | `""`                | Relays the same start/stop (and [crash](#troubleshooting)) notifications to Discord — it is independent of `sns_email_address`, so it works with or without email too.                                                                                                                           |
 | `discord_message`                            | `""`                | Optional text prepended above the notification in Discord (e.g. `@everyone`). No effect when `discord_webhook_url` is unset.                                                                                                                                                                     |
 | `container_insights`                         | `false`             | Off by default, because it bills per custom metric.                                                                                                                                                                                                                                              |
 | `minecraft_image_env_vars`                   | `{ EULA = "TRUE" }` | Any itzg image setting goes here — see [Customizing the server](#customizing-the-server).                                                                                                                                                                                                        |
@@ -148,9 +148,9 @@ just start-url       # print the bookmarkable HTTP start URL — needs enable_st
 just stop            # force it down now, instead of waiting on shutdown_minutes
 just console         # shell into the running server via ECS Exec — no network access needed
 just logs-dns        # tail the Route 53 query log (us-east-1) — is a lookup reaching Route 53?
-just logs-launcher   # tail the launcher Lambda's log (us-east-1) — is it being invoked?
-just logs-minecraft  # tail the server's own log — needs debug = true in terraform.tfvars
-just logs-watchdog   # tail the watchdog's log — start/shutdown decisions, DNS updates
+just logs-launcher   # launcher Lambda's recent log (us-east-1) — is it being invoked?
+just logs-minecraft  # server's own recent log — needs debug = true in terraform.tfvars
+just logs-watchdog   # watchdog's recent log — start/shutdown decisions, DNS updates
 just sns-status      # confirmed vs PendingConfirmation on the email subscription
 just dashboard-url   # print the CloudWatch dashboard URL — needs enable_observability = true
 just backup-status   # list world-data recovery points — needs enable_backup = true
@@ -175,6 +175,8 @@ just start-url
 
 That prints a URL with a generated secret baked in (`?token=...`) — the Function URL itself has no AWS auth, so the token is the only thing gating it. You can bookmark it, tap it, and the server will start in the same way that `just start` does. There is no equivalent stop URL yet — you still use `just stop`, or rely on `shutdown_minutes` of idle time — this is deliberately start-only for now.
 
+`logs-launcher`, `logs-minecraft` and `logs-watchdog` take an optional number of minutes to look back (default 30), e.g. `just logs-minecraft 120`. They print a snapshot rather than following live: those log groups use CloudWatch's cheaper Infrequent Access class, which only supports Logs Insights queries, so `aws logs tail` doesn't work on them. Insights can lag a minute or two behind, so run it again if the output stops early. (`logs-dns` is a Standard-class group and still tails live.)
+
 ### Admin access
 
 RCON (25575/tcp) is closed to the internet by default — see [`rcon_allowed_cidrs`](#variables) if you want it open to a specific IP. For most admin needs, `just console` is the better default: it shells into the running container via ECS Exec (IAM-authenticated over SSM, with no network exposure at all), where `rcon-cli` is already available:
@@ -183,6 +185,35 @@ RCON (25575/tcp) is closed to the internet by default — see [`rcon_allowed_cid
 just console "rcon-cli list"   # one-shot command
 just console                   # interactive shell (default)
 ```
+
+## Troubleshooting
+
+### The server won't come up, but ECS says it's running
+
+The task runs two containers, and only the watchdog is marked essential. If the Minecraft container crashes, the task keeps running with just the watchdog, so `just status` shows `running: 1` while nobody can connect. The watchdog gives up and scales back to zero after `startup_minutes`, and the next connection attempt starts it again, which crashes again.
+
+You'll get a **"⚠️ Server crashed"** notification (email and/or Discord, whichever you've set up) the moment this happens. An EventBridge rule in `modules/notifications` watches ECS for the Minecraft container stopping while its task is still meant to be running. A normal scale-down or Spot interruption doesn't trigger it. Neither does a crash if you have no notification channel configured, because the rule is only created alongside the SNS topic.
+
+To find out why:
+
+1. Set `debug = true` in `terraform.tfvars` and `just apply`. Without it, the container's output isn't shipped anywhere.
+2. For more detail from the itzg image itself, also add `DEBUG = "true"` to `minecraft_image_env_vars`. This traces every step of its startup script.
+3. Start the server (`just start`), wait for it to crash, then `just logs-minecraft`.
+
+Turn both back off once you're done. They make the log much noisier and cost a little in CloudWatch ingestion.
+
+### Crash at startup with `'modrinth' command failed`
+
+On every boot the itzg image asks Modrinth's API to resolve `MODRINTH_PROJECTS`, even when the mods are already on EFS, and its startup script exits on any error. On 2026-09-26 Modrinth's `/v2/project/<id>/version` endpoint started timing out (while the rest of its API still answered), and the server crashed at startup every time with `ReadTimeoutException` and `'modrinth' command failed`.
+
+The Java container now starts through a small wrapper (`local.modrinth_fallback_start` in `modules/ecs/main.tf`). It probes that same endpoint first, and if Modrinth doesn't answer, it unsets `MODRINTH_PROJECTS` so the server boots with the mods already in `/data/mods`. You'll see `[modrinth-fallback] Modrinth API unreachable…` in the log when that happens. Limits:
+
+- It adds up to ~45s to startup during an outage (three 15s attempts).
+- Mods aren't updated or added while it's falling back.
+- If Modrinth passes the probe and then fails partway through, startup still crashes (and you'll get the crash notification).
+- On a brand-new world volume there are no mods yet to fall back to.
+
+If you ever need to skip Modrinth deliberately, comment out `MODRINTH_PROJECTS` and `just apply`. Existing mods are kept, because the image only deletes them when `REMOVE_OLD_MODS` is on.
 
 ## Teardown
 

@@ -470,6 +470,77 @@ phase, just worth doing.
   `.checkov.yaml` alongside the others that trade a Checkov pass for an
   explicit cost choice.
 
+- **2026-09-26 incident: server crash-looped on a Modrinth API outage —
+  three fixes.** Symptom: the server wouldn't come up, but `just status`
+  showed `running: 1`. The minecraft-server container is `essential =
+  false` (only the watchdog is essential), so when it exited with code 1
+  the task stayed up with just the watchdog, which waited `startup_minutes`
+  and scaled to zero. The next DNS lookup started it again, and it
+  crashed again. Diagnosis took a while for two reasons. With `debug =
+  false` there were no container logs at all. Then, once they existed,
+  the first Logs Insights queries came back truncated at `Resolving type
+  given FABRIC` (Insights lags on fresh Infrequent Access data), which
+  wrongly pointed at the Fabric step. The full log showed `mc-image-helper
+  modrinth` failing with `ReadTimeoutException` against
+  `api.modrinth.com`. Reproduced from a home connection: `/v2/project/<id>`
+  answered, but `/v2/project/<id>/version` (what the image actually calls)
+  timed out on every attempt. So it was a partial Modrinth outage, not
+  AWS, Fabric, the image (last pushed the day before, when the server had
+  worked), or the world data. Fixes:
+  - **Modrinth fallback entrypoint** (`local.modrinth_fallback_start` in
+    `modules/ecs/main.tf`, Java edition only). itzg has no "use what's
+    installed if Modrinth is down" option: `handleModrinthProjects` in
+    its `start-setupModpack` runs under `set -e` whenever
+    `MODRINTH_PROJECTS` is set. The wrapper probes the `/version` endpoint
+    for the first listed project (`curl --retry 2 --max-time 15`) and, on
+    failure, unsets `MODRINTH_PROJECTS` so that step is skipped. Existing
+    jars in `/data/mods` stay because `REMOVE_OLD_MODS` defaults to false.
+    It then `exec`s `/image/scripts/start`, so the start script, not a
+    wrapper shell, receives SIGTERM on scale-down and the world still saves.
+    It probes `/version` specifically because probing `/v2/project/<id>`
+    was tried first and passed during this outage. Rejected alternative:
+    running the start script and retrying without Modrinth on failure. That
+    can't `exec`, so signals would need forwarding by hand, and it would
+    also retry on unrelated crashes.
+  - **Crash notification** (`modules/notifications`, created whenever the
+    SNS topic is). An EventBridge rule on `ECS Task State Change` matches
+    the minecraft-server container `STOPPED` while the task's
+    `desiredStatus` is still `RUNNING`. Scale-down and Spot interruptions
+    set `desiredStatus = STOPPED` before containers stop, so they don't
+    match. EventBridge matches array-of-object fields element-wise, but the
+    watchdog is essential, so any `STOPPED` container on a task still
+    desired `RUNNING` must be minecraft-server. The target is a small Lambda
+    (`crash_lambda/`) that publishes to the existing topic with Subject
+    `Minecraft server crashed`. It isn't EventBridge -> SNS directly because
+    EventBridge can't publish to a topic encrypted with the AWS-managed
+    `alias/aws/sns` key, and a customer-managed key (~$1/month) isn't worth
+    it here. The Discord relay keys off that Subject for an orange
+    "⚠️ Server crashed" card with the restart button. Known gap: a crash
+    that lands in the same state-change event as the task reaching
+    RUNNING could in principle notify twice. That's not deduplicated,
+    because a duplicate alert is harmless.
+  - **`just logs-*` recipes rewritten to use Logs Insights.** The
+    launcher, minecraft and watchdog log groups are `INFREQUENT_ACCESS`,
+    which rejects `FilterLogEvents`/`GetLogEvents`, so `aws logs tail`
+    (what the recipes used) had never worked on them. They now share a
+    private `logs-insights` recipe that runs a query and prints a snapshot
+    (optional `minutes` look-back, default 30), and there's a new
+    `aws_region` root output for the ECS-region groups. Gotcha recorded in
+    the recipe: the JMESPath projection must be `results[*]`, not
+    `results[]`, or every column comes back `None`. `logs-dns` is
+    Standard class and still tails live.
+  - **Deploy permissions:** the first apply failed with
+    `AccessDeniedException` on `PutRule`. `AmazonECS_FullAccess` does list
+    `events:PutRule`/`PutTargets`, but only on ECS's own `ecs-managed-*`
+    rules, and it has no `events:TagResource`/`ListTagsForResource` at all
+    (needed because of provider `default_tags`). The deploy group already
+    holds IAM's 10-managed-policy maximum, so an inline `EventBridgeRules`
+    policy on it grants the rule/target/tag actions scoped to
+    `rule/minecraft-*`, plus `events:TestEventPattern` on `*` (that
+    action has no resource scoping). With it, the rule's pattern was
+    checked against sample events: a crash while running matches, while a
+    normal scale-down, a scale-down mid-stop and a healthy task don't.
+
 ## Inspiration repo
 
 <https://github.com/AndresArcones/minecraft-aws-ondemand>
